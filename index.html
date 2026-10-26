@@ -1,0 +1,131 @@
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>College Campus Complaint Management System</title>
+
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <header class="navbar">
+        <div class="logo">CampusCare</div>
+
+        <nav>
+            <a href="#home">Home</a>
+            <a href="#features">Features</a>
+            <a href="#login">Login</a>
+        </nav>
+    </header>
+
+    <main>
+        <section class="hero" id="home">
+
+            <div class="hero-content">
+                <span class="badge">SMART CAMPUS SOLUTION</span>
+
+                <h1>
+                    College Campus<br>
+                    Complaint Management System
+                </h1>
+
+                <p>
+                    Report campus problems, track complaints,
+                    and help make your college a better place.
+                </p>
+
+                <a href="#login" class="main-button">
+                    Get Started
+                </a>
+            </div>
+
+        </section>
+
+        <section class="features" id="features">
+
+            <h2>What Can You Do?</h2>
+
+            <div class="feature-container">
+
+                <div class="feature-card">
+                    <h3>📝 Submit Complaint</h3>
+                    <p>
+                        Report classroom, laboratory, water,
+                        electricity, and other campus issues.
+                    </p>
+                </div>
+
+                <div class="feature-card">
+                    <h3>🔍 Track Complaint</h3>
+                    <p>
+                        Track the progress of your complaint
+                        using its unique complaint ID.
+                    </p>
+                </div>
+
+                <div class="feature-card">
+                    <h3>🛡️ Secure System</h3>
+                    <p>
+                        Access complaint services through
+                        an authorized user account.
+                    </p>
+                </div>
+
+            </div>
+
+        </section>
+
+        <section class="login-section" id="login">
+
+            <h2>Choose Your Portal</h2>
+
+            <p>Select the portal you want to access.</p>
+
+            <div class="portal-container">
+
+                <div class="portal-card">
+                    <h3>Student Portal</h3>
+
+                    <p>
+                        Submit complaints and track their status.
+                    </p>
+
+                    <button onclick="selectPortal('student')">
+                        Student Login
+                    </button>
+                </div>
+
+                <div class="portal-card">
+                    <h3>Management Portal</h3>
+
+                    <p>
+                        Manage complaints and update their status.
+                    </p>
+
+                    <button onclick="selectPortal('admin')">
+                        Management Login
+                    </button>
+                </div>
+
+            </div>
+
+            <div id="portal-message" class="portal-message"></div>
+
+        </section>
+    </main>
+
+    <footer>
+        <p>
+            © 2026 College Campus Complaint Management System
+        </p>
+    </footer>
+
+    <script src="script.js"></script>
+
+</body>
+</html>
+```
