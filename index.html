@@ -1,131 +1,236 @@
-```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
+    <meta name="description" content="Report campus problems, track complaints, and help make your college a better place.">
     <title>College Campus Complaint Management System</title>
-
     <link rel="stylesheet" href="style.css">
 </head>
-
 <body>
-
     <header class="navbar">
-        <div class="logo">CampusCare</div>
-
-        <nav>
+        <a class="logo" href="#home" aria-label="CampusCare home">CampusCare</a>
+        <nav aria-label="Main navigation">
             <a href="#home">Home</a>
             <a href="#features">Features</a>
-            <a href="#login">Login</a>
+            <a href="#portal">Portals</a>
         </nav>
     </header>
-
     <main>
         <section class="hero" id="home">
-
             <div class="hero-content">
                 <span class="badge">SMART CAMPUS SOLUTION</span>
-
-                <h1>
-                    College Campus<br>
-                    Complaint Management System
-                </h1>
-
-                <p>
-                    Report campus problems, track complaints,
-                    and help make your college a better place.
-                </p>
-
-                <a href="#login" class="main-button">
-                    Get Started
-                </a>
+                <h1>College Campus<br>Complaint Management System</h1>
+                <p>Report campus problems, track complaints, and help make your college a better place.</p>
+                <a href="#portal" class="main-button">Get Started</a>
             </div>
-
         </section>
-
         <section class="features" id="features">
-
             <h2>What Can You Do?</h2>
-
             <div class="feature-container">
-
                 <div class="feature-card">
                     <h3>📝 Submit Complaint</h3>
-                    <p>
-                        Report classroom, laboratory, water,
-                        electricity, and other campus issues.
-                    </p>
+                    <p>Report classroom, laboratory, water, electricity, and other campus issues.</p>
                 </div>
-
                 <div class="feature-card">
                     <h3>🔍 Track Complaint</h3>
-                    <p>
-                        Track the progress of your complaint
-                        using its unique complaint ID.
-                    </p>
+                    <p>See the latest status of your complaint using its unique complaint ID.</p>
                 </div>
-
                 <div class="feature-card">
                     <h3>🛡️ Secure System</h3>
-                    <p>
-                        Access complaint services through
-                        an authorized user account.
-                    </p>
+                    <p>Access complaint services through an authorized user account.</p>
                 </div>
-
             </div>
-
         </section>
-
-        <section class="login-section" id="login">
-
+        <section class="login-section" id="portal">
             <h2>Choose Your Portal</h2>
-
             <p>Select the portal you want to access.</p>
-
             <div class="portal-container">
-
                 <div class="portal-card">
                     <h3>Student Portal</h3>
-
-                    <p>
-                        Submit complaints and track their status.
-                    </p>
-
-                    <button onclick="selectPortal('student')">
-                        Student Login
-                    </button>
+                    <p>Submit complaints and track their status.</p>
+                    <button type="button" data-portal="student">Student Login</button>
                 </div>
-
                 <div class="portal-card">
                     <h3>Management Portal</h3>
-
-                    <p>
-                        Manage complaints and update their status.
-                    </p>
-
-                    <button onclick="selectPortal('admin')">
-                        Management Login
-                    </button>
+                    <p>Review complaints and update their status.</p>
+                    <button type="button" data-portal="admin">Management Login</button>
                 </div>
-
             </div>
-
-            <div id="portal-message" class="portal-message"></div>
-
+            <div id="portal-message" class="portal-message" role="status" aria-live="polite"></div>
+            <section id="portal-panel" class="portal-panel" aria-labelledby="portal-title" hidden>
+                <div class="portal-panel-heading">
+                    <button type="button" id="portal-back" class="text-button">← Choose another portal</button>
+                    <span id="portal-kicker" class="portal-kicker">Secure portal</span>
+                    <h3 id="portal-title">Student Portal</h3>
+                </div>
+                <p id="action-message" class="action-message" role="status" aria-live="polite"></p>
+                <div id="session-error" class="state-card" hidden>
+                    <p id="session-error-text"></p>
+                    <button type="button" id="session-error-logout" class="secondary-button">Sign out</button>
+                </div>
+                <div id="role-mismatch" class="state-card" hidden>
+                    <p id="role-mismatch-text"></p>
+                    <button type="button" id="open-correct-portal" class="secondary-button">Open my portal</button>
+                </div>
+                <div id="approval-pending" class="state-card" hidden>
+                    <p>Your account is waiting for owner approval. The owner will review your name, email, and college ID before enabling access.</p>
+                    <button type="button" id="approval-pending-signout" class="secondary-button">Sign out</button>
+                </div>                <div id="auth-area" class="auth-card">
+                    <p id="auth-intro" class="auth-intro">Sign in to continue.</p>
+                    <form id="signin-form" class="form-grid">
+                        <label for="signin-email">Email address</label>
+                        <input id="signin-email" name="email" type="email" autocomplete="email" maxlength="254" required>
+                        <label for="signin-password">Password</label>
+                        <input id="signin-password" name="password" type="password" autocomplete="current-password" minlength="6" required>
+                        <button type="submit" class="form-submit">Sign in</button>
+                    </form>
+                    <form id="signup-form" class="form-grid" hidden>
+                        <label for="signup-name">Full name</label>
+                        <input id="signup-name" name="full_name" type="text" autocomplete="name" maxlength="100" required>
+                        <label for="signup-college-id">College ID / roll number</label>
+                        <input id="signup-college-id" name="college_id" type="text" autocomplete="off" maxlength="50" required>                        <label for="signup-email">Email address</label>
+                        <input id="signup-email" name="email" type="email" autocomplete="email" maxlength="254" required>
+                        <label for="signup-password">Password</label>
+                        <input id="signup-password" name="password" type="password" autocomplete="new-password" minlength="10" required>
+                        <p class="field-hint">Use at least 10 characters.</p>
+                        <button type="submit" class="form-submit">Request account</button>
+                    </form>
+                    <form id="reset-form" class="form-grid" hidden>
+                        <p class="form-description">Enter your email address and we will send a password reset link if an account matches.</p>
+                        <label for="reset-email">Email address</label>
+                        <input id="reset-email" name="email" type="email" autocomplete="email" maxlength="254" required>
+                        <button type="submit" class="form-submit">Send reset link</button>
+                    </form>
+                    <form id="update-password-form" class="form-grid" hidden>
+                        <p class="form-description">Choose a new password for your account.</p>
+                        <label for="new-password">New password</label>
+                        <input id="new-password" name="password" type="password" autocomplete="new-password" minlength="10" required>
+                        <button type="submit" class="form-submit">Update password</button>
+                    </form>
+                    <div class="auth-links">
+                        <button type="button" id="show-signup" class="text-button">Create a student account</button>
+                        <button type="button" id="show-signin" class="text-button" hidden>Back to sign in</button>
+                        <button type="button" id="forgot-password" class="text-button">Forgot password?</button>
+                    </div>
+                </div>
+                <section id="dashboard" class="dashboard" aria-label="Complaint dashboard" hidden>
+                    <div class="dashboard-heading">
+                        <div>
+                            <p id="dashboard-kicker" class="portal-kicker">Your portal</p>
+                            <h3 id="dashboard-welcome">Welcome</h3>
+                            <p id="dashboard-email" class="muted"></p>
+                        </div>
+                        <button type="button" id="signout-button" class="secondary-button">Sign out</button>
+                    </div>
+                    <div id="student-tools" hidden>
+                        <section class="dashboard-section">
+                            <h4>Submit a complaint</h4>
+                            <form id="complaint-form" class="form-grid complaint-form">
+                                <label for="complaint-title">Short title</label>
+                                <input id="complaint-title" name="title" type="text" maxlength="120" required>
+                                <label for="complaint-category">Category</label>
+                                <select id="complaint-category" name="category" required>
+                                    <option value="">Choose a category</option>
+                                    <option value="classroom">Classroom</option>
+                                    <option value="laboratory">Laboratory</option>
+                                    <option value="water">Water</option>
+                                    <option value="electricity">Electricity</option>
+                                    <option value="cleanliness">Cleanliness</option>
+                                    <option value="hostel">Hostel</option>
+                                    <option value="other">Other</option>
+                                </select>
+                                <label for="complaint-location">Campus location</label>
+                                <input id="complaint-location" name="location" type="text" maxlength="160" required>
+                                <label for="complaint-description">Describe the problem</label>
+                                <textarea id="complaint-description" name="description" rows="4" maxlength="3000" required></textarea>
+                                <button type="submit" class="form-submit">Submit complaint</button>
+                            </form>
+                        </section>
+                        <section class="dashboard-section">
+                            <div class="section-heading">
+                                <div>
+                                    <h4>Your complaints</h4>
+                                    <p class="muted">Use a complaint ID such as CC-100001 to find a specific report.</p>
+                                </div>
+                            </div>
+                            <form id="student-filter-form" class="filter-form">
+                                <label for="student-ticket-filter">Complaint ID</label>
+                                <input id="student-ticket-filter" name="ticket" inputmode="numeric" placeholder="CC-100001">
+                                <button type="submit" class="secondary-button">Track</button>
+                                <button type="button" id="student-clear-filter" class="text-button">Show all</button>
+                            </form>
+                            <div id="student-list" class="complaint-list" aria-live="polite"></div>
+                            <div id="student-pagination" class="pagination" hidden>
+                                <span id="student-page-label"></span>
+                                <div>
+                                    <button type="button" id="student-prev" class="secondary-button">Previous</button>
+                                    <button type="button" id="student-next" class="secondary-button">Next</button>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+                    <div id="management-tools" hidden>
+                        <section class="dashboard-section">
+                            <div class="section-heading">
+                                <div>
+                                    <h4>Complaint queue</h4>
+                                    <p class="muted">Filter the queue or find a report by its complaint ID.</p>
+                                </div>
+                            </div>
+                            <form id="management-filter-form" class="filter-form">
+                                <label for="management-ticket-filter">Complaint ID</label>
+                                <input id="management-ticket-filter" name="ticket" inputmode="numeric" placeholder="CC-100001">
+                                <label for="management-status-filter">Status</label>
+                                <select id="management-status-filter" name="status">
+                                    <option value="">All statuses</option>
+                                    <option value="submitted">Submitted</option>
+                                    <option value="in_progress">In progress</option>
+                                    <option value="resolved">Resolved</option>
+                                    <option value="rejected">Rejected</option>
+                                </select>
+                                <label for="management-category-filter">Category</label>
+                                <select id="management-category-filter" name="category">
+                                    <option value="">All categories</option>
+                                    <option value="classroom">Classroom</option>
+                                    <option value="laboratory">Laboratory</option>
+                                    <option value="water">Water</option>
+                                    <option value="electricity">Electricity</option>
+                                    <option value="cleanliness">Cleanliness</option>
+                                    <option value="hostel">Hostel</option>
+                                    <option value="other">Other</option>
+                                </select>
+                                <button type="submit" class="secondary-button">Apply filters</button>
+                                <button type="button" id="management-clear-filter" class="text-button">Clear</button>
+                            </form>
+                            <div id="management-list" class="complaint-list" aria-live="polite"></div>
+                            <div id="management-pagination" class="pagination" hidden>
+                                <span id="management-page-label"></span>
+                                <div>
+                                    <button type="button" id="management-prev" class="secondary-button">Previous</button>
+                                    <button type="button" id="management-next" class="secondary-button">Next</button>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+                    <div id="owner-tools" hidden>
+                        <section class="dashboard-section">
+                            <div class="section-heading">
+                                <div>
+                                    <h4>Manage accounts</h4>
+                                    <p class="muted">Review the college ID, then approve as Student, assign Admin, or keep Pending. You control the number of admins.</p>
+                                    <p id="owner-admin-count" class="muted"></p>
+                                    <p id="owner-pending-count" class="muted"></p>
+                                </div>
+                            </div>
+                            <div id="owner-account-list" class="owner-account-list" aria-live="polite"></div>
+                        </section>
+                    </div>
+                </section>
+            </section>
         </section>
     </main>
-
-    <footer>
-        <p>
-            © 2026 College Campus Complaint Management System
-        </p>
-    </footer>
-
-    <script src="script.js"></script>
-
+    <footer><p>© 2026 College Campus Complaint Management System</p></footer>
+    <script type="module" src="main.js"></script>
 </body>
 </html>
-```
