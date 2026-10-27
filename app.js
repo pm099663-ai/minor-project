@@ -89,7 +89,7 @@ export async function createComplaint({ category, title, location, description }
 }
 
 const COMPLAINT_PROOF_BUCKET = "complaint-proofs";
-const COMPLAINT_PROOF_MAX_BYTES = 25 * 1024 * 1024;
+export const COMPLAINT_PROOF_MAX_BYTES = 25 * 1024 * 1024;
 const COMPLAINT_PROOF_TYPES = new Set([
     "image/jpeg", "image/png", "image/webp", "image/gif", "image/heic", "image/heif",
     "video/mp4", "video/webm", "video/quicktime"

@@ -1,5 +1,6 @@
 import {
     attachComplaintProof,
+    COMPLAINT_PROOF_MAX_BYTES,
     createComplaint,
     createComplaintProofUrl,
     getProfile,
@@ -320,7 +321,7 @@ function startProofRecording() {
         if (!event.data?.size) return;
         proofRecordingChunks.push(event.data);
         const totalBytes = proofRecordingChunks.reduce((total, chunk) => total + chunk.size, 0);
-        if (totalBytes >= MAX_PROOF_BYTES && proofRecorder?.state === "recording") {
+        if (totalBytes >= COMPLAINT_PROOF_MAX_BYTES && proofRecorder?.state === "recording") {
             byId("proof-camera-status").textContent = "Size limit reached. Finishing video…";
             proofRecorder.stop();
         }
