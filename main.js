@@ -6,6 +6,7 @@ import {
     getProfile,
     isSupabaseConfigured,
     loadComplaints,
+    loadComplaintSubmitters,
     listProfilesForOwner,
     setProfileRole,
     registerStudent,
@@ -15,6 +16,7 @@ import {
     supabase,
     updateComplaint,
     updatePassword,
+    updateOwnBranch,
     validateComplaintProof
 } from "./app.js";
 
@@ -173,6 +175,9 @@ function renderSession() {
     byId("dashboard-welcome").textContent = "Welcome, " + (state.profile.full_name || "Campus user");
     byId("dashboard-email").textContent = state.user.email || "";
     byId("student-tools").hidden = actualPortal !== "student";
+    byId("student-branch-section").hidden = actualPortal !== "student";
+    byId("student-branch-input").value = state.profile.branch || "";
+    byId("student-branch-message").textContent = state.profile.branch ? "Current branch: " + state.profile.branch : "Add your branch so management can identify your report.";
     byId("management-tools").hidden = actualPortal !== "admin";
     byId("owner-tools").hidden = state.profile.role !== "owner";
     setMessage("");
@@ -473,6 +478,10 @@ function makeComplaintCard(row, management = false) {
 
     const details = document.createElement("div");
     details.className = "complaint-details";
+    if (management) {
+        appendText(details, "p", "", "Student: " + (row.student_name || "Unknown student"));
+        appendText(details, "p", "", "Branch: " + (row.student_branch || "Not provided"));
+    }
     appendText(details, "p", "", "Category: " + categoryLabel(row.category));
     appendText(details, "p", "", "Location: " + row.location);
     appendText(details, "p", "", "Submitted: " + formatDate(row.created_at));
@@ -557,6 +566,15 @@ async function loadAndRenderComplaints(audience) {
         });
         loading.remove();
 
+        if (isManagement && result.rows.length) {
+            const submitters = await loadComplaintSubmitters(result.rows.map((row) => row.user_id));
+            const profilesById = new Map(submitters.map((profile) => [profile.id, profile]));
+            result.rows = result.rows.map((row) => {
+                const profile = profilesById.get(row.user_id);
+                return { ...row, student_name: profile?.full_name, student_branch: profile?.branch };
+            });
+        }
+
         if (!result.rows.length) {
             appendText(container, "p", "empty-state", "No complaints found.");
         } else {
@@ -602,6 +620,7 @@ async function loadAndRenderAccounts() {
             appendText(card, "h5", "", profile.full_name || "Campus user");
             appendText(card, "p", "muted", profile.email || "Email unavailable");
             if (profile.college_id) appendText(card, "p", "muted", "College ID / roll number: " + profile.college_id);
+            if (profile.branch) appendText(card, "p", "muted", "Branch: " + profile.branch);
 
             if (profile.role === "owner") {
                 appendText(card, "p", "status-badge", "Owner — your account");
@@ -712,8 +731,9 @@ byId("signup-form").addEventListener("submit", (event) => {
     const password = values.get("password");
     const fullName = values.get("full_name").trim();
     const collegeId = values.get("college_id").trim();
+    const branch = values.get("branch").trim();
     handleAuthSubmit(form, async () => {
-        const { data, error } = await registerStudent(email, password, fullName, collegeId);
+        const { data, error } = await registerStudent(email, password, fullName, collegeId, branch);
         if (error) throw error;
         if (data.session) {
             await applySession(data.session);
@@ -796,9 +816,30 @@ document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && !byId("proof-camera-modal").hidden) closeProofCamera();
 });
 
+byId("student-branch-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const branch = new FormData(form).get("branch").trim();
+    if (!branch) {
+        byId("student-branch-message").textContent = "Enter your branch first.";
+        return;
+    }
+    handleAuthSubmit(form, async () => {
+        await updateOwnBranch(branch);
+        state.profile.branch = branch;
+        byId("student-branch-message").textContent = "Branch saved: " + branch;
+        setMessage("Your branch has been saved.", "success");
+    }, "Saving…");
+});
+
 byId("complaint-form").addEventListener("submit", (event) => {
     event.preventDefault();
     const form = event.currentTarget;
+    if (!state.profile?.branch) {
+        setMessage("Please save your branch above before submitting a complaint.", "error");
+        byId("student-branch-input").focus();
+        return;
+    }
     const values = new FormData(form);
     const complaint = {
         title: values.get("title").trim(),

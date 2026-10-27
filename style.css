@@ -153,6 +153,9 @@ textarea { resize: vertical; }
 .empty-state { color: #65748b; text-align: center; }
 footer { padding: 22px; background: #10264a; color: white; text-align: center; font-size: 14px; }
 
+.branch-form { display: grid; grid-template-columns: minmax(180px, 1fr) auto; align-items: end; gap: 10px; max-width: 620px; }
+.branch-form label { grid-column: 1 / -1; font-size: 13px; font-weight: bold; }
+.branch-form button { margin: 0; }
 .owner-account-list { display: grid; gap: 14px; }
 .owner-account-card { display: grid; gap: 10px; }
 .owner-account-card h5 { font-size: 16px; }
@@ -163,6 +166,7 @@ footer { padding: 22px; background: #10264a; color: white; text-align: center; f
 .owner-role-form label { display: grid; gap: 6px; font-size: 13px; font-weight: bold; }
 .owner-role-form button { margin: 0; }
 @media (max-width: 700px) {
+    .branch-form { grid-template-columns: 1fr; }
     .navbar { flex-direction: column; gap: 18px; }
     nav { gap: 15px; flex-wrap: wrap; justify-content: center; }
     .feature-container, .portal-container { grid-template-columns: 1fr; }

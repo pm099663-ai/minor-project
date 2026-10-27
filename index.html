@@ -89,7 +89,10 @@
                         <label for="signup-name">Full name</label>
                         <input id="signup-name" name="full_name" type="text" autocomplete="name" maxlength="100" required>
                         <label for="signup-college-id">College ID / roll number</label>
-                        <input id="signup-college-id" name="college_id" type="text" autocomplete="off" maxlength="50" required>                        <label for="signup-email">Email address</label>
+                        <input id="signup-college-id" name="college_id" type="text" autocomplete="off" maxlength="50" required>
+                        <label for="signup-branch">Branch</label>
+                        <input id="signup-branch" name="branch" type="text" autocomplete="organization-title" maxlength="80" required>
+                        <label for="signup-email">Email address</label>
                         <input id="signup-email" name="email" type="email" autocomplete="email" maxlength="254" required>
                         <label for="signup-password">Password</label>
                         <input id="signup-password" name="password" type="password" autocomplete="new-password" minlength="10" required>
@@ -122,6 +125,15 @@
                             <p id="dashboard-email" class="muted"></p>
                         </div>
                         <button type="button" id="signout-button" class="secondary-button">Sign out</button>
+                    </div>
+                    <div id="student-branch-section" class="dashboard-section" hidden>
+                        <h4>Your branch</h4>
+                        <p id="student-branch-message" class="muted"></p>
+                        <form id="student-branch-form" class="branch-form">
+                            <label for="student-branch-input">Branch</label>
+                            <input id="student-branch-input" name="branch" type="text" maxlength="80" required>
+                            <button type="submit" class="secondary-button">Save branch</button>
+                        </form>
                     </div>
                     <div id="student-tools" hidden>
                         <section class="dashboard-section">

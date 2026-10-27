@@ -25,7 +25,7 @@ function requireClient() {
 export async function getProfile(userId) {
     const { data, error } = await requireClient()
         .from("profiles")
-        .select("id, full_name, role, college_id")
+        .select("id, full_name, role, college_id, branch")
         .eq("id", userId)
         .single();
     if (error) throw error;
@@ -36,12 +36,12 @@ export async function signIn(email, password) {
     return requireClient().auth.signInWithPassword({ email, password });
 }
 
-export async function registerStudent(email, password, fullName, collegeId) {
+export async function registerStudent(email, password, fullName, collegeId, branch) {
     return requireClient().auth.signUp({
         email,
         password,
         options: {
-            data: { full_name: fullName, college_id: collegeId },
+            data: { full_name: fullName, college_id: collegeId, branch },
             emailRedirectTo: window.location.href.split("#")[0]
         }
     });
@@ -76,6 +76,23 @@ export async function loadComplaints({ offset, limit, status = "", category = ""
     const { data, error, count } = await query;
     if (error) throw error;
     return { rows: data ?? [], count: count ?? 0 };
+}
+
+export async function loadComplaintSubmitters(userIds) {
+    const ids = [...new Set(userIds)].filter(Boolean);
+    if (!ids.length) return [];
+    const { data, error } = await requireClient()
+        .from("profiles")
+        .select("id, full_name, branch")
+        .in("id", ids);
+    if (error) throw error;
+    return data ?? [];
+}
+
+export async function updateOwnBranch(branch) {
+    const { data, error } = await requireClient().rpc("set_my_branch", { requested_branch: branch });
+    if (error) throw error;
+    return data;
 }
 
 export async function createComplaint({ category, title, location, description }) {
@@ -159,7 +176,7 @@ export async function updateComplaint({ id, status, adminNote, handlerId }) {
 export async function listProfilesForOwner() {
     const { data, error } = await requireClient()
         .from("profiles")
-        .select("id, full_name, email, college_id, role, created_at")
+        .select("id, full_name, email, college_id, branch, role, created_at")
         .order("created_at", { ascending: true });
     if (error) throw error;
     return data ?? [];
