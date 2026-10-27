@@ -1,5 +1,7 @@
 import {
+    attachComplaintProof,
     createComplaint,
+    createComplaintProofUrl,
     getProfile,
     isSupabaseConfigured,
     loadComplaints,
@@ -11,10 +13,16 @@ import {
     signOut,
     supabase,
     updateComplaint,
-    updatePassword
+    updatePassword,
+    validateComplaintProof
 } from "./app.js";
 
 const PAGE_SIZE = 10;
+let selectedProofFile = null;
+let selectedProofPreviewUrl = "";
+let proofCameraStream = null;
+let proofRecorder = null;
+let proofRecordingChunks = [];
 const state = {
     user: null,
     profile: null,
@@ -240,6 +248,214 @@ function appendText(parent, tag, className, text) {
     return element;
 }
 
+function clearProofSelection() {
+    selectedProofFile = null;
+    if (selectedProofPreviewUrl) URL.revokeObjectURL(selectedProofPreviewUrl);
+    selectedProofPreviewUrl = "";
+    byId("complaint-file-input").value = "";
+    byId("complaint-proof-preview").replaceChildren();
+    byId("complaint-proof-preview").hidden = true;
+}
+
+function closeProofCamera() {
+    if (proofRecorder?.state === "recording") {
+        proofRecorder.ondataavailable = null;
+        proofRecorder.onstop = null;
+        proofRecorder.stop();
+    }
+    proofRecorder = null;
+    proofRecordingChunks = [];
+    if (proofCameraStream) {
+        proofCameraStream.getTracks().forEach((track) => track.stop());
+        proofCameraStream = null;
+    }
+    byId("proof-camera-preview").srcObject = null;
+    byId("proof-camera-modal").hidden = true;
+    byId("proof-start-video").hidden = false;
+    byId("proof-stop-video").hidden = true;
+}
+
+async function openProofCamera() {
+    const modal = byId("proof-camera-modal");
+    const status = byId("proof-camera-status");
+    const startVideo = byId("proof-start-video");
+    modal.hidden = false;
+    status.textContent = "Starting camera…";
+    startVideo.disabled = !window.MediaRecorder;
+    try {
+        if (!navigator.mediaDevices?.getUserMedia) throw new Error("Camera access is not available in this browser.");
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: "environment" } },
+            audio: false
+        });
+        if (modal.hidden) {
+            stream.getTracks().forEach((track) => track.stop());
+            return;
+        }
+        proofCameraStream = stream;
+        byId("proof-camera-preview").srcObject = proofCameraStream;
+        status.textContent = "Take a photo or record a short video.";
+        byId("proof-take-photo").focus();
+    } catch (error) {
+        if (modal.hidden) return;
+        closeProofCamera();
+        setMessage("Could not open the camera. Choose a saved photo/video instead. " + formatError(error), "error");
+    }
+}
+
+function startProofRecording() {
+    if (!proofCameraStream || !window.MediaRecorder) {
+        setMessage("Video recording is not supported by this browser.", "error");
+        return;
+    }
+    const supportedTypes = typeof MediaRecorder.isTypeSupported === "function"
+        ? ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm", "video/mp4"]
+        : [];
+    const mimeType = supportedTypes.find((candidate) => MediaRecorder.isTypeSupported(candidate));
+    proofRecorder = mimeType
+        ? new MediaRecorder(proofCameraStream, { mimeType })
+        : new MediaRecorder(proofCameraStream);
+    proofRecordingChunks = [];
+    proofRecorder.ondataavailable = (event) => {
+        if (!event.data?.size) return;
+        proofRecordingChunks.push(event.data);
+        const totalBytes = proofRecordingChunks.reduce((total, chunk) => total + chunk.size, 0);
+        if (totalBytes >= MAX_PROOF_BYTES && proofRecorder?.state === "recording") {
+            byId("proof-camera-status").textContent = "Size limit reached. Finishing video…";
+            proofRecorder.stop();
+        }
+    };
+    proofRecorder.onstop = () => {
+        const recordedType = proofRecorder?.mimeType || proofRecordingChunks[0]?.type || "video/webm";
+        const type = recordedType.split(";")[0].toLowerCase();
+        const extension = type.includes("mp4") ? "mp4" : "webm";
+        const file = new File(proofRecordingChunks, "camera-proof-" + Date.now() + "." + extension, { type });
+        proofRecorder = null;
+        proofRecordingChunks = [];
+        closeProofCamera();
+        selectProofFile(file);
+    };
+    proofRecorder.start(1000);
+    byId("proof-start-video").hidden = true;
+    byId("proof-stop-video").hidden = false;
+    byId("proof-camera-status").textContent = "Recording video…";
+}
+
+function captureProofPhoto() {
+    const video = byId("proof-camera-preview");
+    if (!video.videoWidth || !video.videoHeight) {
+        setMessage("Camera is still starting. Try again in a moment.", "error");
+        return;
+    }
+    const canvas = byId("proof-camera-canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+    canvas.toBlob((blob) => {
+        if (!blob) {
+            setMessage("Could not capture the photo. Try again.", "error");
+            return;
+        }
+        const file = new File([blob], "camera-proof-" + Date.now() + ".jpg", { type: "image/jpeg" });
+        closeProofCamera();
+        selectProofFile(file);
+    }, "image/jpeg", 0.9);
+}
+
+function selectProofFile(file) {
+    clearProofSelection();
+    if (!file) return;
+    try {
+        validateComplaintProof(file);
+    } catch (error) {
+        setMessage(error.message, "error");
+        return;
+    }
+
+    selectedProofFile = file;
+    selectedProofPreviewUrl = URL.createObjectURL(file);
+    const preview = byId("complaint-proof-preview");
+    if (file.type.startsWith("image/")) {
+        const image = document.createElement("img");
+        image.src = selectedProofPreviewUrl;
+        image.alt = "Selected complaint proof";
+        preview.append(image);
+    } else {
+        const video = document.createElement("video");
+        video.src = selectedProofPreviewUrl;
+        video.controls = true;
+        video.preload = "metadata";
+        video.playsInline = true;
+        preview.append(video);
+    }
+    appendText(preview, "p", "field-hint", file.name + " · " + (file.size / (1024 * 1024)).toFixed(1) + " MB");
+    preview.hidden = false;
+    setMessage("");
+}
+
+async function renderComplaintProof(row, container) {
+    try {
+        const url = await createComplaintProofUrl(row.proof_path);
+        container.replaceChildren();
+        if (row.proof_mime_type?.startsWith("image/")) {
+            const image = document.createElement("img");
+            image.src = url;
+            image.alt = "Complaint proof";
+            container.append(image);
+        } else if (row.proof_mime_type?.startsWith("video/")) {
+            const video = document.createElement("video");
+            video.src = url;
+            video.controls = true;
+            video.preload = "metadata";
+            video.playsInline = true;
+            container.append(video);
+        }
+        const link = document.createElement("a");
+        link.href = url;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = "Open proof in a new tab";
+        container.append(link);
+    } catch (error) {
+        container.textContent = "Could not load the attached proof. " + formatError(error);
+    }
+}
+
+function makeProofRetryForm(row) {
+    const form = document.createElement("form");
+    form.className = "proof-upload-form";
+    const label = document.createElement("label");
+    label.textContent = "Add a photo/video proof";
+    const input = document.createElement("input");
+    input.type = "file";
+    input.name = "proof";
+    input.accept = "image/*,video/*";
+    input.capture = "environment";
+    input.required = true;
+    label.append(input);
+    const submit = document.createElement("button");
+    submit.type = "submit";
+    submit.className = "secondary-button";
+    submit.textContent = "Upload proof";
+    form.append(label, submit);
+    form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const file = input.files?.[0];
+        try {
+            validateComplaintProof(file);
+            setBusy(form, true, "Uploading…");
+            await attachComplaintProof({ complaintId: row.id, userId: state.user.id, file });
+            setMessage("Proof attached to CC-" + String(row.ticket_number).padStart(6, "0"), "success");
+            await loadAndRenderComplaints("student");
+        } catch (error) {
+            setMessage(formatError(error), "error");
+        } finally {
+            setBusy(form, false);
+        }
+    });
+    return form;
+}
+
 function makeComplaintCard(row, management = false) {
     const card = document.createElement("article");
     card.className = "complaint-card";
@@ -262,6 +478,15 @@ function makeComplaintCard(row, management = false) {
     appendText(details, "p", "", "Updated: " + formatDate(row.updated_at));
     appendText(details, "p", "complaint-description", row.description);
     if (row.admin_note) appendText(details, "p", "management-note", "Management update: " + row.admin_note);
+    if (row.proof_path) {
+        const proof = document.createElement("div");
+        proof.className = "complaint-proof";
+        appendText(proof, "p", "muted", "Loading attached proof…");
+        details.append(proof);
+        void renderComplaintProof(row, proof);
+    } else if (!management && ["submitted", "in_progress"].includes(row.status)) {
+        details.append(makeProofRetryForm(row));
+    }
     card.append(details);
 
     if (management) {
@@ -541,6 +766,7 @@ byId("approval-pending-signout").addEventListener("click", async () => {
     }
 });
 byId("signout-button").addEventListener("click", async () => {
+    clearProofSelection();
     try {
         const { error } = await signOut();
         if (error) throw error;
@@ -553,6 +779,22 @@ byId("signout-button").addEventListener("click", async () => {
     }
 });
 
+byId("complaint-camera-button").addEventListener("click", openProofCamera);
+byId("complaint-file-button").addEventListener("click", () => byId("complaint-file-input").click());
+byId("complaint-file-input").addEventListener("change", (event) => selectProofFile(event.currentTarget.files?.[0]));
+byId("proof-camera-close").addEventListener("click", closeProofCamera);
+byId("proof-take-photo").addEventListener("click", captureProofPhoto);
+byId("proof-start-video").addEventListener("click", startProofRecording);
+byId("proof-stop-video").addEventListener("click", () => {
+    if (proofRecorder?.state === "recording") {
+        byId("proof-camera-status").textContent = "Preparing video…";
+        proofRecorder.stop();
+    }
+});
+document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !byId("proof-camera-modal").hidden) closeProofCamera();
+});
+
 byId("complaint-form").addEventListener("submit", (event) => {
     event.preventDefault();
     const form = event.currentTarget;
@@ -563,12 +805,32 @@ byId("complaint-form").addEventListener("submit", (event) => {
         location: values.get("location").trim(),
         description: values.get("description").trim()
     };
+    const proofFile = selectedProofFile;
+    try {
+        validateComplaintProof(proofFile);
+    } catch (error) {
+        setMessage(error.message, "error");
+        return;
+    }
     handleAuthSubmit(form, async () => {
         const data = await createComplaint(complaint);
+        const ticket = "CC-" + String(data.ticket_number).padStart(6, "0");
+        if (proofFile) {
+            try {
+                await attachComplaintProof({ complaintId: data.id, userId: state.user.id, file: proofFile });
+            } catch (error) {
+                form.reset();
+                clearProofSelection();
+                state.studentPage = 0;
+                await loadAndRenderComplaints("student");
+                setMessage("Complaint " + ticket + " was saved, but its proof did not upload. Add proof from the complaint card and try again. " + formatError(error), "error");
+                return;
+            }
+        }
         form.reset();
+        clearProofSelection();
         state.studentPage = 0;
-        setMessage("Complaint CC-" + String(data.ticket_number).padStart(6, "0") +
-            " submitted. Keep this ID to track it.", "success");
+        setMessage("Complaint " + ticket + " submitted. Keep this ID to track it.", "success");
         await loadAndRenderComplaints("student");
     }, "Submitting…");
 });

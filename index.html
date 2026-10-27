@@ -144,9 +144,34 @@
                                 <input id="complaint-location" name="location" type="text" maxlength="160" required>
                                 <label for="complaint-description">Describe the problem</label>
                                 <textarea id="complaint-description" name="description" rows="4" maxlength="3000" required></textarea>
+                                <label>Photo or video proof (optional)</label>
+                                <div class="proof-actions">
+                                    <button type="button" id="complaint-camera-button" class="secondary-button">Take photo / video</button>
+                                    <button type="button" id="complaint-file-button" class="secondary-button">Choose from device</button>
+                                </div>
+
+                                <input id="complaint-file-input" type="file" accept="image/*,video/*" hidden>
+                                <p class="field-hint">Use the camera or choose an existing file. One image or video, up to 25 MB.</p>
+                                <div id="complaint-proof-preview" class="proof-preview" hidden></div>
                                 <button type="submit" class="form-submit">Submit complaint</button>
                             </form>
                         </section>
+                        <div id="proof-camera-modal" class="camera-modal" role="dialog" aria-modal="true" aria-labelledby="proof-camera-title" hidden>
+                            <section class="camera-dialog">
+                                <div class="camera-heading">
+                                    <h5 id="proof-camera-title">Capture proof</h5>
+                                    <button type="button" id="proof-camera-close" class="secondary-button">Close</button>
+                                </div>
+                                <video id="proof-camera-preview" autoplay muted playsinline></video>
+                                <canvas id="proof-camera-canvas" hidden></canvas>
+                                <p id="proof-camera-status" class="field-hint">Allow camera access to take a photo or record a video.</p>
+                                <div class="camera-controls">
+                                    <button type="button" id="proof-take-photo">Take photo</button>
+                                    <button type="button" id="proof-start-video">Start video</button>
+                                    <button type="button" id="proof-stop-video" hidden>Stop recording</button>
+                                </div>
+                            </section>
+                        </div>
                         <section class="dashboard-section">
                             <div class="section-heading">
                                 <div>

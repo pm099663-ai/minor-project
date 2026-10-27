@@ -64,7 +64,7 @@ export async function updatePassword(password) {
 export async function loadComplaints({ offset, limit, status = "", category = "", ticketNumber = "", ownerId = "" }) {
     let query = requireClient()
         .from("complaints")
-        .select("id, ticket_number, user_id, category, title, location, description, status, admin_note, handled_by, created_at, updated_at", { count: "exact" })
+        .select("id, ticket_number, user_id, category, title, location, description, status, admin_note, handled_by, proof_path, proof_mime_type, created_at, updated_at", { count: "exact" })
         .order("created_at", { ascending: false })
         .range(offset, offset + limit - 1);
 
@@ -86,6 +86,64 @@ export async function createComplaint({ category, title, location, description }
         .single();
     if (error) throw error;
     return data;
+}
+
+const COMPLAINT_PROOF_BUCKET = "complaint-proofs";
+const COMPLAINT_PROOF_MAX_BYTES = 25 * 1024 * 1024;
+const COMPLAINT_PROOF_TYPES = new Set([
+    "image/jpeg", "image/png", "image/webp", "image/gif", "image/heic", "image/heif",
+    "video/mp4", "video/webm", "video/quicktime"
+]);
+
+export function validateComplaintProof(file) {
+    if (!file) return;
+    if (!COMPLAINT_PROOF_TYPES.has(file.type.toLowerCase())) {
+        throw new Error("Choose a JPG, PNG, WebP, GIF, HEIC, MP4, WebM, or MOV photo/video.");
+    }
+    if (file.size > COMPLAINT_PROOF_MAX_BYTES) {
+        throw new Error("The photo/video must be 25 MB or smaller.");
+    }
+}
+
+export async function attachComplaintProof({ complaintId, userId, file }) {
+    if (!file) throw new Error("Choose a photo or video first.");
+    validateComplaintProof(file);
+    const originalName = (file.name || "proof").split(/[\\/]/).pop();
+    const safeName = originalName.replace(/[^a-zA-Z0-9._-]+/g, "_").replace(/^\.+/, "").slice(-100) || "proof";
+    const uniqueName = globalThis.crypto?.randomUUID?.() || (Date.now() + "-" + Math.random().toString(36).slice(2));
+    const path = userId + "/" + complaintId + "/" + uniqueName + "-" + safeName;
+    const bucket = requireClient().storage.from(COMPLAINT_PROOF_BUCKET);
+    const { data: uploaded, error: uploadError } = await bucket.upload(path, file, {
+        cacheControl: "3600",
+        contentType: file.type,
+        upsert: false
+    });
+    if (uploadError) throw uploadError;
+
+    const { data, error } = await requireClient()
+        .from("complaints")
+        .update({ proof_path: uploaded.path, proof_mime_type: file.type.toLowerCase() })
+        .eq("id", complaintId)
+        .select("id, proof_path, proof_mime_type")
+        .single();
+    if (error) {
+        try {
+            await bucket.remove([uploaded.path]);
+        } catch {
+            // Keep the original database error; cleanup only removes unlinked uploads.
+        }
+        throw error;
+    }
+    return data;
+}
+
+export async function createComplaintProofUrl(path) {
+    const { data, error } = await requireClient()
+        .storage
+        .from(COMPLAINT_PROOF_BUCKET)
+        .createSignedUrl(path, 60 * 60);
+    if (error) throw error;
+    return data.signedUrl;
 }
 
 export async function updateComplaint({ id, status, adminNote, handlerId }) {

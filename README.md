@@ -17,6 +17,8 @@ This is a static HTML/CSS/JavaScript site backed by Supabase Auth and Postgres. 
 5. Copy the project URL and publishable key (or legacy anon key) into supabase-config.js. These are public browser values. Never put a service_role or secret key in this site.
 6. In Authentication settings, enable Email sign-in. Configure the site URL and allowed redirect URLs for local development and the deployed site. Password reset and email verification links return to the current page.
 7. New users submit a Student Portal account request with their college ID or roll number. The owner reviews each request in Manage accounts and assigns Pending, Student, or Admin. Admins manage complaints but cannot grant portal access.
+8. In Supabase Storage, create a PRIVATE bucket named **complaint-proofs**. Set the size limit to 25 MB and allowed MIME types to: image/jpeg, image/png, image/webp, image/gif, image/heic, image/heif, video/mp4, video/webm, and video/quicktime.
+9. After creating that bucket, run supabase/migrations/20261027000000_complaint_proof_storage.sql in the SQL Editor. Students can take a photo/video with their camera or choose a saved file; the student and management accounts can view it.
 
 The first owner is configured in supabase/migrations/20261026010000_owner_admin_management.sql. Change that email in the final UPDATE statement before running the migration if a different existing account should own the site.
 
@@ -42,8 +44,9 @@ Deploy this directory as the root of a static site, including supabase-config.js
 - complaints: students can create complaints and read only their own. Admins and the owner can read the queue and update complaint status and management notes. Complaint history cannot be deleted from the browser.
 - RLS is enabled on both tables. SQL grants further limit each role's allowed operations and columns.
 - Only an owner can change account roles through the website. The owner account cannot demote itself from the page.
-- Complaint images or attachments are not part of the current page, so no Storage bucket is configured.
+- Complaint proof photos and videos are stored in a private Storage bucket and can be viewed only by the student who submitted the complaint and management accounts.
 
 ## Verification and limits
 
 The student account signed in, submitted complaint CC-100001, and retrieved it by tracking number. Admin sign-in and dashboard access were also confirmed in the browser. The owner-management and owner-approval migrations must be run in Supabase before the owner approval controls work. Live demo: https://campuscare-complaints.vercel.app
+
