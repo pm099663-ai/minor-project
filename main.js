@@ -1,13 +1,16 @@
 import {
+    assignComplaint,
     attachComplaintProof,
     COMPLAINT_PROOF_MAX_BYTES,
     createComplaint,
     createComplaintProofUrl,
+    createPrivateEvidenceUrl,
     getProfile,
     isSupabaseConfigured,
     loadComplaints,
     loadComplaintSubmitters,
-    listProfilesForOwner,
+    listProfilesForManagement,
+    registerEmployee,
     setProfileRole,
     registerStudent,
     requestPasswordReset,
@@ -17,12 +20,16 @@ import {
     updateComplaint,
     updatePassword,
     updateOwnBranch,
+    uploadStudentIdCard,
+    uploadWorkProof,
+    validateIdCard,
     validateComplaintProof
 } from "./app.js";
 
 const PAGE_SIZE = 10;
 let selectedProofFile = null;
 let selectedProofPreviewUrl = "";
+let pendingIdCardFile = null;
 let proofCameraStream = null;
 let proofRecorder = null;
 let proofRecordingChunks = [];
@@ -35,6 +42,8 @@ const state = {
     studentPage: 0,
     managementPage: 0,
     studentTicket: "",
+    employeeAccounts: [],
+    managementTab: "queue",
     managementFilters: { ticketNumber: "", status: "", category: "" }
 };
 
@@ -86,8 +95,8 @@ function showPortal(portal) {
     portalPanel.hidden = false;
     setPortalMessage("");
     setMessage("");
-    byId("portal-title").textContent = portal === "student" ? "Student Portal" : "Management Portal";
-    byId("portal-kicker").textContent = portal === "student" ? "Student access" : "Management access";
+    byId("portal-title").textContent = portal === "student" ? "Student Portal" : portal === "employee" ? "Employee Portal" : "Management Portal";
+    byId("portal-kicker").textContent = portal === "student" ? "Student access" : portal === "employee" ? "Employee access" : "Management access";
 
     if (state.user && state.profile) {
         renderSession();
@@ -103,17 +112,24 @@ function setAuthView(view) {
     state.view = view;
     byId("signin-form").hidden = view !== "signin";
     byId("signup-form").hidden = view !== "signup";
+    byId("employee-signup-form").hidden = view !== "signup" || state.selectedPortal !== "employee";
+    byId("signup-form").hidden = view !== "signup" || state.selectedPortal !== "student";
     byId("reset-form").hidden = view !== "reset";
     byId("update-password-form").hidden = view !== "update";
-    byId("show-signup").hidden = view !== "signin" || state.selectedPortal !== "student";
+    byId("show-signup").hidden = view !== "signin" || !["student", "employee"].includes(state.selectedPortal);
+    byId("show-signup").textContent = state.selectedPortal === "employee" ? "Create an employee account" : "Create a student account";
     byId("forgot-password").hidden = view !== "signin";
     byId("show-signin").hidden = view === "signin";
     if (view === "signin") {
         byId("auth-intro").textContent = state.selectedPortal === "student"
             ? "Sign in to submit complaints and track your reports."
-            : "Sign in with an account approved for the management portal.";
+            : state.selectedPortal === "employee"
+                ? "Sign in to view jobs assigned to you and submit completion proof."
+                : "Sign in with an account approved for the management portal.";
     } else if (view === "signup") {
-        byId("auth-intro").textContent = "Create an account. The owner reviews it before portal access is enabled.";
+        byId("auth-intro").textContent = state.selectedPortal === "employee"
+            ? "Request an employee account. Management reviews it before work access is enabled."
+            : "Create a student account. Management reviews your college ID before portal access is enabled.";
     } else if (view === "reset") {
         byId("auth-intro").textContent = "Request a secure password reset link.";
     } else {
@@ -146,6 +162,7 @@ function showSessionError(error) {
 function roleForProfile(profile) {
     if (profile.role === "admin" || profile.role === "owner") return "admin";
     if (profile.role === "student") return "student";
+    if (profile.role === "employee") return "employee";
     return "pending";
 }
 
@@ -160,8 +177,15 @@ function renderSession() {
         sessionError.hidden = true;
         roleMismatch.hidden = true;
         byId("approval-pending").hidden = false;
+        const isStudentRequest = state.profile.requested_role !== "employee";
+        byId("approval-pending-text").textContent = isStudentRequest
+            ? (state.profile.id_card_path
+                ? "Your student account and college ID are waiting for management approval."
+                : "Your student account is waiting for approval. Upload your college ID card so management can review it.")
+            : "Your employee account is waiting for management approval. Once approved, assigned work will appear here.";
+        byId("approval-id-card-form").hidden = !isStudentRequest || Boolean(state.profile.id_card_path);
         byId("portal-title").textContent = "Account pending approval";
-        byId("portal-kicker").textContent = "Awaiting owner review";
+        byId("portal-kicker").textContent = "Awaiting management review";
         return;
     }
     byId("approval-pending").hidden = true;
@@ -169,24 +193,36 @@ function renderSession() {
     roleMismatch.hidden = true;
     authArea.hidden = true;
     dashboard.hidden = false;
-    byId("portal-title").textContent = actualPortal === "admin" ? "Management Portal" : "Student Portal";
-    byId("portal-kicker").textContent = actualPortal === "admin" ? "Management access" : "Student access";
-    byId("dashboard-kicker").textContent = actualPortal === "admin" ? "Management dashboard" : "Student dashboard";
+    const dashboardTitle = actualPortal === "admin" ? "Management Portal" : actualPortal === "employee" ? "Employee Portal" : "Student Portal";
+    byId("portal-title").textContent = dashboardTitle;
+    byId("portal-kicker").textContent = actualPortal === "admin" ? "Management access" : actualPortal === "employee" ? "Employee access" : "Student access";
+    byId("dashboard-kicker").textContent = actualPortal === "admin" ? "Management dashboard" : actualPortal === "employee" ? "Employee dashboard" : "Student dashboard";
     byId("dashboard-welcome").textContent = "Welcome, " + (state.profile.full_name || "Campus user");
     byId("dashboard-email").textContent = state.user.email || "";
     byId("student-tools").hidden = actualPortal !== "student";
     byId("student-branch-section").hidden = actualPortal !== "student";
+    byId("student-id-card-section").hidden = actualPortal !== "student" || Boolean(state.profile.id_card_path);
     byId("student-branch-input").value = state.profile.branch || "";
     byId("student-branch-message").textContent = state.profile.branch ? "Current branch: " + state.profile.branch : "Add your branch so management can identify your report.";
     byId("management-tools").hidden = actualPortal !== "admin";
-    byId("owner-tools").hidden = state.profile.role !== "owner";
+    byId("employee-tools").hidden = actualPortal !== "employee";
+    byId("management-account-hint").textContent = state.profile.role === "owner"
+        ? "Review students and employees, then choose Pending, Student, Employee, or Admin. Only the owner can assign Admin access."
+        : "Review student and employee requests. Admin access can only be assigned by the owner.";
+    state.managementTab = "queue";
+    setManagementTab("queue");
     setMessage("");
 
     if (actualPortal === "admin") {
-        loadAndRenderComplaints("management");
-        if (state.profile.role === "owner") loadAndRenderAccounts();
-    } else {
+        loadAndRenderComplaints("resolution");
+        listProfilesForManagement().then((profiles) => {
+            state.employeeAccounts = profiles.filter((profile) => profile.role === "employee");
+            loadAndRenderComplaints("management");
+        }).catch(() => { state.employeeAccounts = []; });
+    } else if (actualPortal === "student") {
         loadAndRenderComplaints("student");
+    } else {
+        loadAndRenderComplaints("employee");
     }
 }
 
@@ -228,6 +264,7 @@ function statusLabel(status) {
     return ({
         submitted: "Submitted",
         in_progress: "In progress",
+        work_completed: "Work completed — review needed",
         resolved: "Resolved",
         rejected: "Rejected"
     })[status] || status;
@@ -427,6 +464,34 @@ async function renderComplaintProof(row, container) {
     }
 }
 
+async function renderWorkProof(row, container) {
+    try {
+        const url = await createPrivateEvidenceUrl(row.work_proof_path);
+        container.replaceChildren();
+        if (row.work_proof_mime_type?.startsWith("image/")) {
+            const image = document.createElement("img");
+            image.src = url;
+            image.alt = "Employee completion proof";
+            container.append(image);
+        } else if (row.work_proof_mime_type?.startsWith("video/")) {
+            const video = document.createElement("video");
+            video.src = url;
+            video.controls = true;
+            video.preload = "metadata";
+            video.playsInline = true;
+            container.append(video);
+        }
+        const link = document.createElement("a");
+        link.href = url;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = "Open employee completion proof";
+        container.append(link);
+    } catch (error) {
+        container.textContent = "Could not load employee proof. " + formatError(error);
+    }
+}
+
 function makeProofRetryForm(row) {
     const form = document.createElement("form");
     form.className = "proof-upload-form";
@@ -462,7 +527,68 @@ function makeProofRetryForm(row) {
     return form;
 }
 
-function makeComplaintCard(row, management = false) {
+function makeEmployeeCompletionForm(row) {
+    const form = document.createElement("form");
+    form.className = "employee-completion-form form-grid";
+    form.dataset.complaintId = row.id;
+    const label = document.createElement("label");
+    label.textContent = "Completion photo or video";
+    const input = document.createElement("input");
+    input.type = "file";
+    input.name = "work_proof";
+    input.accept = "image/*,video/*";
+    input.capture = "environment";
+    input.required = true;
+    label.append(input);
+    const hint = appendText(form, "p", "field-hint", "After adding a photo/video, this job moves to management for review.");
+    const submit = document.createElement("button");
+    submit.type = "submit";
+    submit.className = "secondary-button";
+    submit.textContent = "Submit completed work";
+    form.append(label, hint, submit);
+    return form;
+}
+
+function makeAssignmentForm(row) {
+    const form = document.createElement("form");
+    form.className = "assignment-form form-grid";
+    form.dataset.complaintId = row.id;
+    appendText(form, "h5", "", row.assigned_employee_id ? "Reassign employee" : "Assign to employee");
+    const select = document.createElement("select");
+    select.name = "employee_id";
+    select.required = true;
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = "Choose an approved employee";
+    placeholder.selected = true;
+    select.append(placeholder);
+    for (const employee of state.employeeAccounts) {
+        const option = document.createElement("option");
+        option.value = employee.id;
+        option.textContent = (employee.full_name || employee.email || "Employee") + (employee.work_category ? " — " + employee.work_category : "");
+        option.selected = employee.id === row.assigned_employee_id;
+        select.append(option);
+    }
+    if (!state.employeeAccounts.length) {
+        const empty = document.createElement("option");
+        empty.value = "";
+        empty.textContent = "No approved employees yet";
+        select.append(empty);
+    }
+    const label = document.createElement("label");
+    label.append(document.createTextNode("Employee"), select);
+    const submit = document.createElement("button");
+    submit.type = "submit";
+    submit.className = "secondary-button";
+    submit.textContent = "Assign work";
+    submit.disabled = state.employeeAccounts.length === 0;
+    form.append(label, submit);
+    return form;
+}
+
+function makeComplaintCard(row, mode = "student") {
+    const management = mode === "management" || mode === "resolution";
+    const employeeView = mode === "employee";
     const card = document.createElement("article");
     card.className = "complaint-card";
 
@@ -494,12 +620,27 @@ function makeComplaintCard(row, management = false) {
         appendText(proof, "p", "muted", "Loading attached proof…");
         details.append(proof);
         void renderComplaintProof(row, proof);
-    } else if (!management && ["submitted", "in_progress"].includes(row.status)) {
+    } else if (mode === "student" && ["submitted", "in_progress"].includes(row.status)) {
         details.append(makeProofRetryForm(row));
+    }
+    if (row.work_proof_path) {
+        const workProof = document.createElement("div");
+        workProof.className = "complaint-proof";
+        appendText(workProof, "p", "muted", "Loading employee completion proof…");
+        details.append(workProof);
+        void renderWorkProof(row, workProof);
     }
     card.append(details);
 
-    if (management) {
+    if (mode === "management" && !["resolved", "rejected", "work_completed"].includes(row.status)) {
+        card.append(makeAssignmentForm(row));
+    }
+
+    if (employeeView && row.status === "in_progress") {
+        card.append(makeEmployeeCompletionForm(row));
+    }
+
+    if ((mode === "management" && !["work_completed", "resolved", "rejected"].includes(row.status)) || mode === "resolution") {
         const form = document.createElement("form");
         form.className = "admin-update-form";
         form.dataset.complaintId = row.id;
@@ -508,17 +649,20 @@ function makeComplaintCard(row, management = false) {
         statusLabelElement.append(document.createTextNode("Status"));
         const statusSelect = document.createElement("select");
         statusSelect.name = "status";
-        const statuses = {
-            submitted: "Submitted",
-            in_progress: "In progress",
-            resolved: "Resolved",
-            rejected: "Rejected"
-        };
-        for (const [value, label] of Object.entries(statuses)) {
+        const statuses = mode === "resolution"
+            ? [["resolved", "Resolved"], ["rejected", "Rejected"], ["in_progress", "Needs more work"]]
+            : [["submitted", "Submitted"], ["rejected", "Rejected"]];
+        const chooseStatus = document.createElement("option");
+        chooseStatus.value = "";
+        chooseStatus.textContent = mode === "resolution" ? "Choose review result" : "Choose status update";
+        chooseStatus.selected = true;
+        chooseStatus.disabled = true;
+        statusSelect.required = true;
+        statusSelect.append(chooseStatus);
+        for (const [value, label] of statuses) {
             const option = document.createElement("option");
             option.value = value;
             option.textContent = label;
-            option.selected = value === row.status;
             statusSelect.append(option);
         }
         statusLabelElement.append(statusSelect);
@@ -545,23 +689,29 @@ function makeComplaintCard(row, management = false) {
 }
 
 async function loadAndRenderComplaints(audience) {
-    const isManagement = audience === "management";
-    const container = byId(isManagement ? "management-list" : "student-list");
-    const page = isManagement ? state.managementPage : state.studentPage;
-    const filters = isManagement
+    const isManagement = audience === "management" || audience === "resolution";
+    const isResolution = audience === "resolution";
+    const isEmployee = audience === "employee";
+    const container = byId(audience === "management" ? "management-list" : isResolution ? "management-resolution-list" : isEmployee ? "employee-list" : "student-list");
+    const page = audience === "management" ? state.managementPage : audience === "student" ? state.studentPage : 0;
+    const filters = audience === "management"
         ? state.managementFilters
-        : { ticketNumber: state.studentTicket, status: "", category: "" };
-    const pagination = byId(isManagement ? "management-pagination" : "student-pagination");
+        : isResolution
+            ? { ticketNumber: "", status: "work_completed", category: "" }
+            : { ticketNumber: audience === "student" ? state.studentTicket : "", status: "", category: "" };
+    const pagination = audience === "management" ? byId("management-pagination") : audience === "student" ? byId("student-pagination") : null;
 
     container.replaceChildren();
     const loading = appendText(container, "p", "empty-state", "Loading complaints…");
-    pagination.hidden = true;
+    if (pagination) pagination.hidden = true;
 
     try {
         const result = await loadComplaints({
             offset: page * PAGE_SIZE,
-            limit: PAGE_SIZE,
-            ownerId: isManagement ? "" : state.user.id,
+            limit: isResolution || isEmployee ? 50 : PAGE_SIZE,
+            ownerId: audience === "student" ? state.user.id : "",
+            assignedTo: isEmployee ? state.user.id : "",
+            excludeStatus: audience === "management" && state.managementFilters.status !== "work_completed" ? "work_completed" : "",
             ...filters
         });
         loading.remove();
@@ -579,10 +729,12 @@ async function loadAndRenderComplaints(audience) {
             appendText(container, "p", "empty-state", "No complaints found.");
         } else {
             const fragment = document.createDocumentFragment();
-            for (const row of result.rows) fragment.append(makeComplaintCard(row, isManagement));
+            const mode = isResolution ? "resolution" : isEmployee ? "employee" : isManagement ? "management" : "student";
+            for (const row of result.rows) fragment.append(makeComplaintCard(row, mode));
             container.append(fragment);
         }
 
+        if (!pagination) return;
         const pageCount = Math.max(1, Math.ceil(result.count / PAGE_SIZE));
         const start = result.count === 0 ? 0 : page * PAGE_SIZE + 1;
         const end = Math.min((page + 1) * PAGE_SIZE, result.count);
@@ -597,14 +749,31 @@ async function loadAndRenderComplaints(audience) {
     }
 }
 
+function setManagementTab(tab) {
+    state.managementTab = tab;
+    for (const button of document.querySelectorAll("[data-management-tab]")) {
+        const active = button.dataset.managementTab === tab;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-current", active ? "page" : "false");
+    }
+    for (const panel of document.querySelectorAll("[data-management-panel]")) {
+        panel.hidden = panel.dataset.managementPanel !== tab;
+    }
+    if (!state.user || !state.profile || roleForProfile(state.profile) !== "admin") return;
+    if (tab === "accounts") loadAndRenderAccounts();
+    if (tab === "resolve") loadAndRenderComplaints("resolution");
+    if (tab === "queue") loadAndRenderComplaints("management");
+}
+
 async function loadAndRenderAccounts() {
     const container = byId("owner-account-list");
     const loading = appendText(container, "p", "empty-state", "Loading accounts…");
     container.replaceChildren(loading);
 
     try {
-        const profiles = await listProfilesForOwner();
+        const profiles = await listProfilesForManagement();
         loading.remove();
+        state.employeeAccounts = profiles.filter((profile) => profile.role === "employee");
         const adminCount = profiles.filter((profile) => profile.role === "admin").length;
         byId("owner-admin-count").textContent = "Active admins: " + adminCount;
         byId("owner-pending-count").textContent = "Waiting for approval: " + profiles.filter((profile) => profile.role === "pending").length;
@@ -621,9 +790,39 @@ async function loadAndRenderAccounts() {
             appendText(card, "p", "muted", profile.email || "Email unavailable");
             if (profile.college_id) appendText(card, "p", "muted", "College ID / roll number: " + profile.college_id);
             if (profile.branch) appendText(card, "p", "muted", "Branch: " + profile.branch);
+            if (profile.phone) appendText(card, "p", "muted", "Mobile: " + profile.phone);
+            if (profile.work_category) appendText(card, "p", "muted", "Work category: " + profile.work_category);
+            appendText(card, "p", "muted", "Request type: " + (profile.requested_role === "employee" ? "Employee" : "Student"));
+            if (profile.id_card_path) {
+                const cardLink = document.createElement("a");
+                cardLink.href = "#";
+                cardLink.target = "_blank";
+                cardLink.rel = "noopener noreferrer";
+                cardLink.textContent = "Open college ID card";
+                cardLink.addEventListener("click", async (event) => {
+                    event.preventDefault();
+                    const preview = window.open("about:blank", "_blank");
+                    try {
+                        const url = await createPrivateEvidenceUrl(profile.id_card_path);
+                        if (preview) preview.location.href = url;
+                    } catch (error) {
+                        preview?.close();
+                        setMessage("Could not open the college ID card. " + formatError(error), "error");
+                    }
+                });
+                card.append(cardLink);
+            } else if (profile.role === "pending" && profile.requested_role === "student") {
+                appendText(card, "p", "field-hint", "College ID card not uploaded yet.");
+            }
 
             if (profile.role === "owner") {
                 appendText(card, "p", "status-badge", "Owner — your account");
+                container.append(card);
+                continue;
+            }
+
+            if (state.profile.role === "admin" && profile.role === "admin") {
+                appendText(card, "p", "status-badge", "Admin — only the owner can change admin access");
                 container.append(card);
                 continue;
             }
@@ -635,7 +834,9 @@ async function loadAndRenderAccounts() {
             label.append(document.createTextNode("Access"));
             const select = document.createElement("select");
             select.name = "role";
-            for (const [value, text] of [["pending", "Pending approval"], ["student", "Student"], ["admin", "Admin"]]) {
+            const accessOptions = [["pending", "Pending approval"], ["student", "Student"], ["employee", "Employee"]];
+            if (state.profile.role === "owner") accessOptions.push(["admin", "Admin"]);
+            for (const [value, text] of accessOptions) {
                 const option = document.createElement("option");
                 option.value = value;
                 option.textContent = text;
@@ -673,6 +874,10 @@ for (const button of document.querySelectorAll("[data-portal]")) {
     button.addEventListener("click", () => showPortal(button.dataset.portal));
 }
 
+for (const button of document.querySelectorAll("[data-management-tab]")) {
+    button.addEventListener("click", () => setManagementTab(button.dataset.managementTab));
+}
+
 byId("portal-back").addEventListener("click", () => {
     portalPanel.hidden = true;
     setPortalMessage("");
@@ -703,6 +908,7 @@ byId("session-error-logout").addEventListener("click", async () => {
         if (error) throw error;
         state.user = null;
         state.profile = null;
+        pendingIdCardFile = null;
         showAuth();
     } catch (error) {
         setMessage(formatError(error), "error");
@@ -719,6 +925,7 @@ byId("signin-form").addEventListener("submit", (event) => {
         const { data, error } = await signIn(email, password);
         if (error) throw error;
         await applySession(data.session);
+        await uploadPendingStudentIdCard();
         if (data.session) setMessage("Signed in successfully.", "success");
     }, "Signing in…");
 });
@@ -732,19 +939,74 @@ byId("signup-form").addEventListener("submit", (event) => {
     const fullName = values.get("full_name").trim();
     const collegeId = values.get("college_id").trim();
     const branch = values.get("branch").trim();
+    const idCardFile = values.get("id_card");
     handleAuthSubmit(form, async () => {
+        validateIdCard(idCardFile);
         const { data, error } = await registerStudent(email, password, fullName, collegeId, branch);
         if (error) throw error;
+        pendingIdCardFile = idCardFile;
         if (data.session) {
             await applySession(data.session);
-            setMessage(state.profile?.role === "pending" ? "Account created. Waiting for owner approval." : "Your account is ready. You are signed in.", "success");
+            await uploadPendingStudentIdCard();
+            setMessage(state.profile?.role === "pending" ? "Account created. Your request is waiting for management approval." : "Your account is ready. You are signed in.", "success");
         } else {
-            setMessage("Account created. Verify your email, then wait for the owner to approve access.", "success");
+            setMessage("Account created. Verify your email, sign in, and upload the ID card if it did not upload automatically.", "success");
             setAuthView("signin");
             byId("signin-email").value = email;
         }
     }, "Creating account…");
 });
+
+byId("employee-signup-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const values = new FormData(form);
+    const fullName = values.get("full_name").trim();
+    const email = values.get("email").trim();
+    const phone = values.get("phone").trim();
+    const workCategory = values.get("work_category");
+    const password = values.get("password");
+    handleAuthSubmit(form, async () => {
+        const { data, error } = await registerEmployee(email, password, fullName, phone, workCategory);
+        if (error) throw error;
+        if (data.session) {
+            await applySession(data.session);
+            setMessage("Employee account created. It will open after management approves it.", "success");
+        } else {
+            setMessage("Employee account created. Verify your email, then wait for management approval.", "success");
+            setAuthView("signin");
+            byId("signin-email").value = email;
+        }
+    }, "Requesting account…");
+});
+
+async function uploadPendingStudentIdCard() {
+    if (!pendingIdCardFile || !state.user || !state.profile || state.profile.requested_role === "employee" || state.profile.id_card_path) return;
+    await uploadStudentIdCard({ userId: state.user.id, file: pendingIdCardFile });
+    state.profile.id_card_path = "uploaded";
+    state.profile.id_card_mime_type = pendingIdCardFile.type;
+    pendingIdCardFile = null;
+    renderSession();
+}
+
+async function submitStudentIdCard(form) {
+    const file = new FormData(form).get("id_card");
+    validateIdCard(file);
+    await uploadStudentIdCard({ userId: state.user.id, file });
+    state.profile.id_card_path = "uploaded";
+    state.profile.id_card_mime_type = file.type;
+    form.reset();
+    renderSession();
+    setMessage("College ID uploaded. Management can now review your account.", "success");
+}
+
+for (const formId of ["approval-id-card-form", "student-id-card-form"]) {
+    byId(formId).addEventListener("submit", (event) => {
+        event.preventDefault();
+        const form = event.currentTarget;
+        handleAuthSubmit(form, () => submitStudentIdCard(form), "Uploading…");
+    });
+}
 
 byId("reset-form").addEventListener("submit", (event) => {
     event.preventDefault();
@@ -780,6 +1042,7 @@ byId("approval-pending-signout").addEventListener("click", async () => {
         if (error) throw error;
         state.user = null;
         state.profile = null;
+        pendingIdCardFile = null;
         setMessage("You have signed out.", "success");
         showAuth();
     } catch (error) {
@@ -793,6 +1056,7 @@ byId("signout-button").addEventListener("click", async () => {
         if (error) throw error;
         state.user = null;
         state.profile = null;
+        pendingIdCardFile = null;
         setMessage("You have signed out.", "success");
         showAuth();
     } catch (error) {
@@ -934,6 +1198,54 @@ byId("management-next").addEventListener("click", () => {
 });
 
 document.addEventListener("submit", (event) => {
+    const form = event.target.closest(".assignment-form");
+    if (!form) return;
+    event.preventDefault();
+    const employeeId = new FormData(form).get("employee_id");
+    const button = form.querySelector('button[type="submit"]');
+    button.disabled = true;
+    const originalLabel = button.textContent;
+    button.textContent = "Assigning…";
+    assignComplaint(form.dataset.complaintId, employeeId).then(({ notificationError }) => {
+        if (notificationError) {
+            setMessage("Work assigned. The employee email could not be sent yet; configure and deploy the secure email function.", "error");
+        } else {
+            setMessage("Work assigned and email sent to the employee.", "success");
+        }
+        return Promise.all([
+            loadAndRenderComplaints("management"),
+            loadAndRenderComplaints("resolution")
+        ]);
+    }).catch((error) => {
+        setMessage(formatError(error), "error");
+    }).finally(() => {
+        button.disabled = false;
+        button.textContent = originalLabel;
+    });
+});
+
+document.addEventListener("submit", (event) => {
+    const form = event.target.closest(".employee-completion-form");
+    if (!form) return;
+    event.preventDefault();
+    const file = new FormData(form).get("work_proof");
+    const button = form.querySelector('button[type="submit"]');
+    button.disabled = true;
+    const originalLabel = button.textContent;
+    button.textContent = "Uploading…";
+    uploadWorkProof({ complaintId: form.dataset.complaintId, employeeId: state.user.id, file })
+        .then(() => {
+            setMessage("Completion proof sent to management for review.", "success");
+            return loadAndRenderComplaints("employee");
+        })
+        .catch((error) => setMessage(formatError(error), "error"))
+        .finally(() => {
+            button.disabled = false;
+            button.textContent = originalLabel;
+        });
+});
+
+document.addEventListener("submit", (event) => {
     const form = event.target.closest(".admin-update-form");
     if (!form) return;
     event.preventDefault();
@@ -946,11 +1258,13 @@ document.addEventListener("submit", (event) => {
     updateComplaint({
         id: form.dataset.complaintId,
         status: values.get("status"),
-        adminNote: values.get("admin_note").trim(),
-        handlerId: state.user.id
+        adminNote: values.get("admin_note").trim()
     }).then(() => {
-        setMessage("Complaint update saved.", "success");
-        return loadAndRenderComplaints("management");
+        setMessage("Complaint update saved. The student can now see the current status.", "success");
+        return Promise.all([
+            loadAndRenderComplaints("management"),
+            loadAndRenderComplaints("resolution")
+        ]);
     }).catch((error) => {
         setMessage(formatError(error), "error");
     }).finally(() => {

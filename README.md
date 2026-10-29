@@ -4,49 +4,58 @@
 
 Open the deployed website: https://campuscare-complaints.vercel.app
 
-This folder contains the complete static website source, Supabase configuration, and SQL migrations.
+This folder contains the static website source, Supabase configuration, SQL migrations, and the assignment-notification Edge Function.
 
-This is a static HTML/CSS/JavaScript site backed by Supabase Auth and Postgres. The browser uses only the Supabase project URL and publishable (or legacy anon) key. Row Level Security and restricted SQL grants control access to profiles and complaints.
+The website uses Supabase Auth and Postgres. The browser contains only the Supabase project URL and public publishable key. Database Row Level Security and checked RPC functions enforce account and complaint access.
 
 ## Supabase setup
 
-1. Create a Supabase project.
-2. In the project SQL Editor, run supabase/migrations/20261026000000_campuscare.sql.
-3. In a new SQL Editor query, run supabase/migrations/20261026010000_owner_admin_management.sql. This adds owner-only account controls and promotes the existing management account named in that file to the initial owner.
-4. In a new SQL Editor query, run supabase/migrations/20261026020000_owner_approval.sql. New signups will stay pending until the owner approves them. The owner can review the submitted college ID and grant Student or Admin access.
-5. Copy the project URL and publishable key (or legacy anon key) into supabase-config.js. These are public browser values. Never put a service_role or secret key in this site.
-6. In Authentication settings, enable Email sign-in. Configure the site URL and allowed redirect URLs for local development and the deployed site. Password reset and email verification links return to the current page.
-7. New users submit a Student Portal account request with their college ID or roll number. The owner reviews each request in Manage accounts and assigns Pending, Student, or Admin. Admins manage complaints but cannot grant portal access.
-8. In Supabase Storage, create a PRIVATE bucket named **complaint-proofs**. Set the size limit to 25 MB and allowed MIME types to: image/jpeg, image/png, image/webp, image/gif, image/heic, image/heif, video/mp4, video/webm, and video/quicktime.
-9. After creating that bucket, run supabase/migrations/20261027000000_complaint_proof_storage.sql in the SQL Editor. Students can take a photo/video with their camera or choose a saved file; the student and management accounts can view it.
+Apply the existing migrations in order, then apply `supabase/migrations/20261029000000_employee_workflow.sql`:
 
-The first owner is configured in supabase/migrations/20261026010000_owner_admin_management.sql. Change that email in the final UPDATE statement before running the migration if a different existing account should own the site.
+1. `20261026000000_campuscare.sql`
+2. `20261026010000_owner_admin_management.sql`
+3. `20261026020000_owner_approval.sql`
+4. `20261027000000_complaint_proof_storage.sql`
+5. `20261028000000_student_branch_and_owner_name.sql`
+6. `20261029000000_employee_workflow.sql`
+
+The complaint-proof migration expects a private `complaint-proofs` bucket (25 MB; images and videos). The new workflow migration creates a second private bucket for college ID cards and employee work evidence.
+
+Students request an account with college ID/roll number, branch, and a college ID image/PDF. Employees request an account with name, email, mobile number, and work category. New requests stay pending until management approves them. Admins can approve and manage student/employee accounts, but only the owner can create or change Admin accounts.
+
+Management assigns an approved employee to a complaint. The employee sees only assigned complaints, uploads a work photo/video, and submits it for management review. Management resolves or returns the work; the student can see the updated status and management note.
+
+## Assignment email setup
+
+Deploy `supabase/functions/notify-assignment` as a Supabase Edge Function. Configure its secrets:
+
+- `RESEND_API_KEY`: API key from Resend.
+- `FROM_EMAIL`: sender email allowed by the Resend account.
+- `APP_URL` (optional): website URL; defaults to `https://campuscare-complaints.vercel.app`.
+
+Supabase provides its project URL and service-role key to deployed Edge Functions. Never put the service-role key or Resend key in browser code. Assignment works in the app without the email function, but the employee notification email needs the function and a verified sender configured.
 
 ## Run locally
 
-Serve this directory over HTTP so the JavaScript modules and CDN import work. For example, with Node.js installed:
+Serve this directory over HTTP so JavaScript modules can load:
 
-~~~~powershell
+```powershell
 npx http-server . -p 8000
-~~~~
+```
 
-Then open http://localhost:8000. Add that local URL to the Supabase Auth redirect allowlist. No build step is required. The Supabase JavaScript v2 client is loaded from esm.sh, so the browser needs network access.
+Then open http://localhost:8000. Add that URL to the Supabase Auth redirect allowlist. No build step is required; the Supabase JavaScript client loads from esm.sh.
 
 ## Deploy
 
-Deploy this directory as the root of a static site, including supabase-config.js, index.html, style.css, main.js, and app.js. Set the deployed origin as the Supabase Auth site URL and add the exact origin/page URL to allowed redirect URLs. Confirm the project URL and publishable key in supabase-config.js before publishing.
+Deploy this folder as the static site root, including `index.html`, `style.css`, `main.js`, `app.js`, and `supabase-config.js`. Set the production URL in Supabase Authentication URL Configuration. The public project URL and publishable key go in `supabase-config.js`; never place a service-role or secret key there.
 
-.env.example records the public configuration names for tooling that injects environment variables. A plain static host does not read .env; configure the two values in supabase-config.js or have the host generate that file during deployment.
+## Access model
 
-## Data and access model
+- Students can submit complaints and see only their own reports.
+- Employees can see only work assigned to their account and submit completion evidence.
+- Admins and the owner can see complaints, assign employees, manage account requests, and resolve/return completed work.
+- Admins cannot create or alter admin access. Only the owner can assign Admin.
+- Student ID cards, complaint photos/videos, and employee work evidence are kept in private Storage buckets.
+- Complaint history cannot be deleted from the browser.
 
-- profiles: one row per Auth user; new rows are created by a database trigger with the pending role. Users can read only their own profile. The owner can read profiles and change other users between pending, student, and admin.
-- complaints: students can create complaints and read only their own. Admins and the owner can read the queue and update complaint status and management notes. Complaint history cannot be deleted from the browser.
-- RLS is enabled on both tables. SQL grants further limit each role's allowed operations and columns.
-- Only an owner can change account roles through the website. The owner account cannot demote itself from the page.
-- Complaint proof photos and videos are stored in a private Storage bucket and can be viewed only by the student who submitted the complaint and management accounts.
-
-## Verification and limits
-
-The student account signed in, submitted complaint CC-100001, and retrieved it by tracking number. Admin sign-in and dashboard access were also confirmed in the browser. The owner-management and owner-approval migrations must be run in Supabase before the owner approval controls work. Live demo: https://campuscare-complaints.vercel.app
-
+The earlier demo verified student sign-in, complaint submission/tracking, and management access. The new workflow requires the migration and Edge Function setup above before the live site supports it.

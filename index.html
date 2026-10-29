@@ -56,6 +56,11 @@
                     <p>Review complaints and update their status.</p>
                     <button type="button" data-portal="admin">Management Login</button>
                 </div>
+                <div class="portal-card">
+                    <h3>Employee Portal</h3>
+                    <p>See assigned work and upload completion proof.</p>
+                    <button type="button" data-portal="employee">Employee Login</button>
+                </div>
             </div>
             <div id="portal-message" class="portal-message" role="status" aria-live="polite"></div>
             <section id="portal-panel" class="portal-panel" aria-labelledby="portal-title" hidden>
@@ -74,7 +79,12 @@
                     <button type="button" id="open-correct-portal" class="secondary-button">Open my portal</button>
                 </div>
                 <div id="approval-pending" class="state-card" hidden>
-                    <p>Your account is waiting for owner approval. The owner will review your name, email, and college ID before enabling access.</p>
+                    <p id="approval-pending-text">Your account is waiting for approval.</p>
+                    <form id="approval-id-card-form" class="form-grid" hidden>
+                        <label for="approval-id-card">College ID card image or PDF</label>
+                        <input id="approval-id-card" name="id_card" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf" required>
+                        <button type="submit" class="secondary-button">Upload college ID</button>
+                    </form>
                     <button type="button" id="approval-pending-signout" class="secondary-button">Sign out</button>
                 </div>                <div id="auth-area" class="auth-card">
                     <p id="auth-intro" class="auth-intro">Sign in to continue.</p>
@@ -92,12 +102,38 @@
                         <input id="signup-college-id" name="college_id" type="text" autocomplete="off" maxlength="50" required>
                         <label for="signup-branch">Branch</label>
                         <input id="signup-branch" name="branch" type="text" autocomplete="organization-title" maxlength="80" required>
+                        <label for="signup-id-card">College ID card image or PDF</label>
+                        <input id="signup-id-card" name="id_card" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf" required>
+                        <p class="field-hint">Private upload. JPG, PNG, WebP, or PDF, up to 10 MB. If email confirmation is needed, upload after signing in.</p>
                         <label for="signup-email">Email address</label>
                         <input id="signup-email" name="email" type="email" autocomplete="email" maxlength="254" required>
                         <label for="signup-password">Password</label>
                         <input id="signup-password" name="password" type="password" autocomplete="new-password" minlength="10" required>
                         <p class="field-hint">Use at least 10 characters.</p>
                         <button type="submit" class="form-submit">Request account</button>
+                    </form>
+                    <form id="employee-signup-form" class="form-grid" hidden>
+                        <label for="employee-signup-name">Full name</label>
+                        <input id="employee-signup-name" name="full_name" type="text" autocomplete="name" maxlength="100" required>
+                        <label for="employee-signup-email">Email address</label>
+                        <input id="employee-signup-email" name="email" type="email" autocomplete="email" maxlength="254" required>
+                        <label for="employee-signup-phone">Mobile number</label>
+                        <input id="employee-signup-phone" name="phone" type="tel" autocomplete="tel" minlength="7" maxlength="25" required>
+                        <label for="employee-work-category">Work category</label>
+                        <select id="employee-work-category" name="work_category" required>
+                            <option value="">Choose a work category</option>
+                            <option>Electrician</option>
+                            <option>Plumber</option>
+                            <option>Construction work</option>
+                            <option>Technical support</option>
+                            <option>Cleaning</option>
+                            <option>Carpentry</option>
+                            <option>Other maintenance</option>
+                        </select>
+                        <label for="employee-signup-password">Password</label>
+                        <input id="employee-signup-password" name="password" type="password" autocomplete="new-password" minlength="10" required>
+                        <p class="field-hint">Your account needs approval before assigned work appears here.</p>
+                        <button type="submit" class="form-submit">Request employee account</button>
                     </form>
                     <form id="reset-form" class="form-grid" hidden>
                         <p class="form-description">Enter your email address and we will send a password reset link if an account matches.</p>
@@ -135,6 +171,15 @@
                             <button type="submit" class="secondary-button">Save branch</button>
                         </form>
                     </div>
+                    <section id="student-id-card-section" class="dashboard-section" hidden>
+                        <h4>College ID card</h4>
+                        <p class="muted">Upload your college ID card so management can review your student request.</p>
+                        <form id="student-id-card-form" class="form-grid">
+                            <label for="student-id-card">ID card image or PDF</label>
+                            <input id="student-id-card" name="id_card" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf" required>
+                            <button type="submit" class="secondary-button">Upload ID card</button>
+                        </form>
+                    </section>
                     <div id="student-tools" hidden>
                         <section class="dashboard-section">
                             <h4>Submit a complaint</h4>
@@ -208,6 +253,12 @@
                         </section>
                     </div>
                     <div id="management-tools" hidden>
+                        <nav class="management-tabs" aria-label="Management sections">
+                            <button type="button" class="management-tab active" data-management-tab="queue">Complaints</button>
+                            <button type="button" class="management-tab" data-management-tab="resolve">Resolve complaints</button>
+                            <button type="button" class="management-tab" data-management-tab="accounts">Manage accounts</button>
+                        </nav>
+                        <div data-management-panel="queue">
                         <section class="dashboard-section">
                             <div class="section-heading">
                                 <div>
@@ -223,6 +274,7 @@
                                     <option value="">All statuses</option>
                                     <option value="submitted">Submitted</option>
                                     <option value="in_progress">In progress</option>
+                                    <option value="work_completed">Work completed</option>
                                     <option value="resolved">Resolved</option>
                                     <option value="rejected">Rejected</option>
                                 </select>
@@ -249,18 +301,33 @@
                                 </div>
                             </div>
                         </section>
-                    </div>
-                    <div id="owner-tools" hidden>
-                        <section class="dashboard-section">
-                            <div class="section-heading">
-                                <div>
-                                    <h4>Manage accounts</h4>
-                                    <p class="muted">Review the college ID, then approve as Student, assign Admin, or keep Pending. You control the number of admins.</p>
-                                    <p id="owner-admin-count" class="muted"></p>
-                                    <p id="owner-pending-count" class="muted"></p>
+                        </div>
+                        <div data-management-panel="resolve" hidden>
+                            <section class="dashboard-section">
+                                <h4>Resolve complaints</h4>
+                                <p class="muted">Review employee completion proof, then update the status for the student.</p>
+                                <div id="management-resolution-list" class="complaint-list" aria-live="polite"></div>
+                            </section>
+                        </div>
+                        <div data-management-panel="accounts" hidden>
+                            <section class="dashboard-section">
+                                <div class="section-heading">
+                                    <div>
+                                        <h4>Manage accounts</h4>
+                                        <p id="management-account-hint" class="muted">Review account requests and set access.</p>
+                                        <p id="owner-admin-count" class="muted"></p>
+                                        <p id="owner-pending-count" class="muted"></p>
+                                    </div>
                                 </div>
-                            </div>
-                            <div id="owner-account-list" class="owner-account-list" aria-live="polite"></div>
+                                <div id="owner-account-list" class="owner-account-list" aria-live="polite"></div>
+                            </section>
+                        </div>
+                    </div>
+                    <div id="employee-tools" hidden>
+                        <section class="dashboard-section">
+                            <h4>My assigned work</h4>
+                            <p class="muted">Only jobs assigned to your employee account appear here.</p>
+                            <div id="employee-list" class="complaint-list" aria-live="polite"></div>
                         </section>
                     </div>
                 </section>
