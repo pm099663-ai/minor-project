@@ -65,6 +65,32 @@ function setPortalMessage(message = "") {
     portalMessage.textContent = message;
 }
 
+function setSignedInLayout(isSignedIn) {
+    document.body.classList.toggle("dashboard-view", isSignedIn);
+    if (isSignedIn) document.body.classList.remove("authenticated-home-view");
+    byId("dashboard-home-button").hidden = !isSignedIn;
+    byId("nav-dashboard").hidden = true;
+}
+
+function showPublicHome() {
+    if (!state.user) return;
+    portalPanel.hidden = true;
+    document.body.classList.remove("dashboard-view");
+    document.body.classList.add("authenticated-home-view");
+    byId("dashboard-home-button").hidden = true;
+    byId("nav-dashboard").hidden = false;
+    byId("home").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function showDashboard() {
+    if (!state.user) return;
+    document.body.classList.remove("authenticated-home-view");
+    portalPanel.hidden = false;
+    if (state.profile) renderSession();
+    else showSessionError(state.profileError || new Error("The profile record is not available."));
+    portalPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
 function setBusy(form, busy, busyLabel = "Working…") {
     const button = form.querySelector('button[type="submit"]');
     if (!button) return;
@@ -138,6 +164,7 @@ function setAuthView(view) {
 }
 
 function showAuth() {
+    setSignedInLayout(false);
     dashboard.hidden = true;
     sessionError.hidden = true;
     roleMismatch.hidden = true;
@@ -147,6 +174,7 @@ function showAuth() {
 }
 
 function showSessionError(error) {
+    setSignedInLayout(Boolean(state.user));
     state.profile = null;
     state.profileError = error;
     authArea.hidden = true;
@@ -168,6 +196,7 @@ function roleForProfile(profile) {
 
 function renderSession() {
     if (!state.user || !state.profile) return;
+    setSignedInLayout(true);
     const actualPortal = roleForProfile(state.profile);
     state.selectedPortal = actualPortal;
 
@@ -232,6 +261,7 @@ async function applySession(session) {
     state.profileError = null;
 
     if (!state.user) {
+        setSignedInLayout(false);
         dashboard.hidden = true;
         roleMismatch.hidden = true;
         sessionError.hidden = true;
@@ -872,6 +902,16 @@ async function handleAuthSubmit(form, action, busyLabel) {
 
 for (const button of document.querySelectorAll("[data-portal]")) {
     button.addEventListener("click", () => showPortal(button.dataset.portal));
+}
+
+byId("dashboard-home-button").addEventListener("click", showPublicHome);
+byId("nav-dashboard").addEventListener("click", showDashboard);
+for (const link of [byId("nav-home"), document.querySelector(".logo")]) {
+    link.addEventListener("click", (event) => {
+        if (!state.user) return;
+        event.preventDefault();
+        showPublicHome();
+    });
 }
 
 for (const button of document.querySelectorAll("[data-management-tab]")) {
