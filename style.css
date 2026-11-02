@@ -14,6 +14,29 @@ body { font-family: Arial, sans-serif; background: #f4f7fc; color: #172b4d; }
 nav { display: flex; gap: 25px; }
 nav a { color: white; text-decoration: none; font-size: 15px; }
 nav a:hover { color: #55d6c2; }
+.navbar nav .secondary-button { margin: 0; }
+.dashboard-view .navbar, .authenticated-home-view .navbar {
+    background: #fff; color: #172b4d; border-bottom: 1px solid #e0e7f0;
+}
+.dashboard-view .logo, .authenticated-home-view .logo { color: #087e45; }
+.dashboard-view .navbar nav a, .authenticated-home-view .navbar nav a { color: #172b4d; }
+.dashboard-view .navbar nav a:hover, .authenticated-home-view .navbar nav a:hover { color: #087e45; }
+
+.dashboard-view .hero,
+.dashboard-view .features,
+.dashboard-view #portal > h2,
+.dashboard-view #portal > p,
+.dashboard-view .portal-container,
+.dashboard-view #portal-message,
+.dashboard-view footer { display: none !important; }
+.dashboard-view #portal { min-height: calc(100vh - 70px); padding: 24px 5%; text-align: left; }
+.dashboard-view #portal-panel { max-width: 1280px; margin: 0 auto; }
+.dashboard-view #portal-back { display: none; }
+.portal-heading-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+.portal-heading-actions .secondary-button { margin: 0; }
+.authenticated-home-view .portal-container { display: none; }
+.authenticated-home-view #portal > h2,
+.authenticated-home-view #portal > p { display: none; }
 .hero {
     min-height: 430px; display: flex; align-items: center; justify-content: center;
     padding: 60px 8%; text-align: center; background: linear-gradient(135deg, #eaf3ff, #f7faff);
