@@ -913,6 +913,13 @@ for (const link of [byId("nav-home"), document.querySelector(".logo")]) {
         showPublicHome();
     });
 }
+for (const link of document.querySelectorAll('a[href="#portal"]')) {
+    link.addEventListener("click", (event) => {
+        if (!state.user) return;
+        event.preventDefault();
+        showDashboard();
+    });
+}
 
 for (const button of document.querySelectorAll("[data-management-tab]")) {
     button.addEventListener("click", () => setManagementTab(button.dataset.managementTab));
