@@ -16,7 +16,7 @@
 </head>
 <body>
     <header class="navbar">
-        <a class="logo" href="#home" aria-label="CampusCare home">CampusCare</a>
+        <a class="logo" href="#home" aria-label="CampusCare home"><span>Campus</span><strong>Care</strong></a>
         <nav aria-label="Main navigation">
             <a href="#home" id="nav-home">Home</a>
             <button type="button" id="nav-dashboard" class="secondary-button" hidden>My dashboard</button>
@@ -28,45 +28,54 @@
                 <span class="badge">SMART CAMPUS SOLUTION</span>
                 <h1>College Campus<br>Complaint Management System</h1>
                 <p>Report campus problems, track complaints, and help make your college a better place.</p>
-                <a href="#portal" class="main-button">Get Started</a>
+                <a href="#portal" class="main-button">Get Started <span aria-hidden="true">→</span></a>
             </div>
         </section>
         <section class="features" id="features">
             <h2>What Can You Do?</h2>
             <div class="feature-container">
-                <div class="feature-card">
-                    <h3>📝 Submit Complaint</h3>
-                    <p>Report classroom, laboratory, water, electricity, and other campus issues.</p>
-                </div>
-                <div class="feature-card">
-                    <h3>🔍 Track Complaint</h3>
-                    <p>See the latest status of your complaint using its unique complaint ID.</p>
-                </div>
-                <div class="feature-card">
-                    <h3>🛡️ Secure System</h3>
-                    <p>Access complaint services through an authorized user account.</p>
-                </div>
+                <article class="feature-card">
+                    <span class="feature-icon" aria-hidden="true">
+                        <svg viewBox="0 0 48 48"><path d="M12 6h16l8 8v27H12z"/><path d="M28 6v9h8M18 23h12M18 29h9M18 35h5"/><path d="m31 32 8-8 4 4-8 8-5 1z"/></svg>
+                    </span>
+                    <div><h3>Submit Complaint</h3><p>Report classroom, laboratory, water, electricity, and other campus issues.</p></div>
+                </article>
+                <article class="feature-card">
+                    <span class="feature-icon" aria-hidden="true">
+                        <svg viewBox="0 0 48 48"><circle cx="21" cy="21" r="13"/><path d="m31 31 10 10"/></svg>
+                    </span>
+                    <div><h3>Track Complaint</h3><p>See the latest status using your unique complaint ID.</p></div>
+                </article>
+                <article class="feature-card">
+                    <span class="feature-icon" aria-hidden="true">
+                        <svg viewBox="0 0 48 48"><path d="m24 5 16 6v12c0 10-7 16-16 20C15 39 8 33 8 23V11z"/><path d="m17 24 5 5 10-11"/></svg>
+                    </span>
+                    <div><h3>Secure System</h3><p>Access complaint services through an authorized user account.</p></div>
+                </article>
             </div>
         </section>
         <section class="login-section" id="portal">
             <h2>Choose Your Portal</h2>
             <p>Select the portal you want to access.</p>
             <div class="portal-container">
-                <div class="portal-card">
-                    <h3>Student Portal</h3>
-                    <p>Submit complaints and track their status.</p>
-                    <button type="button" data-portal="student">Student Login</button>
-                </div>
-                <div class="portal-card">
-                    <h3>Management Portal</h3>
-                    <p>Review complaints and update their status.</p>
-                    <button type="button" data-portal="admin">Management Login</button>
-                </div>
-                <div class="portal-card">
-                    <h3>Employee Portal</h3>
-                    <p>See assigned work and upload completion proof.</p>
-                    <button type="button" data-portal="employee">Employee Login</button>
-                </div>
+                <article class="portal-card">
+                    <span class="portal-icon" aria-hidden="true">
+                        <svg viewBox="0 0 48 48"><circle cx="17" cy="16" r="6"/><circle cx="31" cy="17" r="5"/><path d="M5 38v-4c0-7 5-11 12-11s12 4 12 11v4zM28 25c7-1 13 3 14 9v4H33"/></svg>
+                    </span>
+                    <div class="portal-copy"><h3>Student Portal</h3><p>Submit complaints and track their status.</p><button type="button" data-portal="student">Student Login <span aria-hidden="true">→</span></button></div>
+                </article>
+                <article class="portal-card">
+                    <span class="portal-icon" aria-hidden="true">
+                        <svg viewBox="0 0 48 48"><path d="M5 19 24 7l19 12zM9 40h30M13 21v15M22 21v15M31 21v15M39 21v15M7 40h34"/></svg>
+                    </span>
+                    <div class="portal-copy"><h3>Management Portal</h3><p>Review complaints and update their status.</p><button type="button" data-portal="admin">Management Login <span aria-hidden="true">→</span></button></div>
+                </article>
+                <article class="portal-card">
+                    <span class="portal-icon" aria-hidden="true">
+                        <svg viewBox="0 0 48 48"><rect x="7" y="15" width="34" height="26" rx="4"/><path d="M16 15v-4a8 8 0 0 1 16 0v4M7 25h34M20 25v5h8v-5"/></svg>
+                    </span>
+                    <div class="portal-copy"><h3>Employee Portal</h3><p>See assigned work and upload completion proof.</p><button type="button" data-portal="employee">Employee Login <span aria-hidden="true">→</span></button></div>
+                </article>
             </div>
             <div id="portal-message" class="portal-message" role="status" aria-live="polite"></div>
             <section id="portal-panel" class="portal-panel" aria-labelledby="portal-title" hidden>
