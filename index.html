@@ -18,9 +18,8 @@
     <header class="navbar">
         <a class="logo" href="#home" aria-label="CampusCare home">CampusCare</a>
         <nav aria-label="Main navigation">
-            <a href="#home">Home</a>
-            <a href="#features">Features</a>
-            <a href="#portal">Portals</a>
+            <a href="#home" id="nav-home">Home</a>
+            <button type="button" id="nav-dashboard" class="secondary-button" hidden>My dashboard</button>
         </nav>
     </header>
     <main>
@@ -72,7 +71,10 @@
             <div id="portal-message" class="portal-message" role="status" aria-live="polite"></div>
             <section id="portal-panel" class="portal-panel" aria-labelledby="portal-title" hidden>
                 <div class="portal-panel-heading">
-                    <button type="button" id="portal-back" class="text-button">← Choose another portal</button>
+                    <div class="portal-heading-actions">
+                        <button type="button" id="portal-back" class="text-button">← Choose another portal</button>
+                        <button type="button" id="dashboard-home-button" class="secondary-button" hidden>Home page</button>
+                    </div>
                     <span id="portal-kicker" class="portal-kicker">Secure portal</span>
                     <h3 id="portal-title">Student Portal</h3>
                 </div>
