@@ -335,3 +335,22 @@ body { background: #fbfcfb; color: var(--campus-ink); font-family: Arial, Helvet
     .feature-icon, .portal-icon { flex-basis: 62px; width: 62px; height: 62px; border-radius: 18px; }
     .feature-icon svg, .portal-icon svg { width: 42px; height: 42px; }
 }
+
+/* Owner-only destructive actions */
+.complaint-card > .danger-button {
+    margin-top: 14px;
+}
+.danger-button {
+    color: #fff;
+    background: #b42318;
+    border: 1px solid #b42318;
+}
+.danger-button:hover:not(:disabled) {
+    color: #fff;
+    background: #8f1d14;
+    border-color: #8f1d14;
+}
+.danger-button:disabled {
+    opacity: .65;
+    cursor: wait;
+}
