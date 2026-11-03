@@ -3,6 +3,8 @@ import {
     attachComplaintProof,
     COMPLAINT_PROOF_MAX_BYTES,
     createComplaint,
+    deleteAccount,
+    deleteComplaint,
     createComplaintProofUrl,
     createPrivateEvidenceUrl,
     getProfile,
@@ -115,17 +117,47 @@ function formatError(error) {
     return message;
 }
 
+function portalLabel(portal) {
+    return portal === "student" ? "Student Portal" : portal === "employee" ? "Employee Portal" : "Management Portal";
+}
+
+function showRoleMismatch(requestedPortal) {
+    if (!state.user || !state.profile) return;
+    const approvedPortal = roleForProfile(state.profile);
+    if (approvedPortal === "pending" || approvedPortal === requestedPortal) {
+        renderSession();
+        return;
+    }
+
+    state.selectedPortal = requestedPortal;
+    setSignedInLayout(true);
+    portalPanel.hidden = false;
+    authArea.hidden = true;
+    dashboard.hidden = true;
+    sessionError.hidden = true;
+    byId("approval-pending").hidden = true;
+    roleMismatch.hidden = false;
+    byId("portal-title").textContent = portalLabel(requestedPortal);
+    byId("portal-kicker").textContent = "Access denied";
+    byId("role-mismatch-text").textContent =
+        "This account is approved for " + portalLabel(approvedPortal) +
+        " only. You tried the " + portalLabel(requestedPortal) + ". Use your approved portal to continue.";
+    byId("open-correct-portal").textContent = "Open " + portalLabel(approvedPortal);
+}
+
 function showPortal(portal) {
     state.selectedPortal = portal;
     state.view = "signin";
     portalPanel.hidden = false;
     setPortalMessage("");
     setMessage("");
-    byId("portal-title").textContent = portal === "student" ? "Student Portal" : portal === "employee" ? "Employee Portal" : "Management Portal";
+    byId("portal-title").textContent = portalLabel(portal);
     byId("portal-kicker").textContent = portal === "student" ? "Student access" : portal === "employee" ? "Employee access" : "Management access";
 
     if (state.user && state.profile) {
-        renderSession();
+        const approvedPortal = roleForProfile(state.profile);
+        if (approvedPortal !== "pending" && approvedPortal !== portal) showRoleMismatch(portal);
+        else renderSession();
     } else if (state.user) {
         showSessionError(state.profileError || new Error("The profile record is not available."));
     } else {
@@ -271,9 +303,14 @@ async function applySession(session) {
 
     try {
         state.profile = await getProfile(state.user.id);
+        const approvedPortal = roleForProfile(state.profile);
         if (!state.selectedPortal) {
-            state.selectedPortal = roleForProfile(state.profile);
+            state.selectedPortal = approvedPortal;
             portalPanel.hidden = false;
+        }
+        if (approvedPortal !== "pending" && approvedPortal !== state.selectedPortal) {
+            showRoleMismatch(state.selectedPortal);
+            return;
         }
         renderSession();
     } catch (error) {
@@ -635,8 +672,8 @@ function makeComplaintCard(row, mode = "student") {
     const details = document.createElement("div");
     details.className = "complaint-details";
     if (management) {
-        appendText(details, "p", "", "Student: " + (row.student_name || "Unknown student"));
-        appendText(details, "p", "", "Branch: " + (row.student_branch || "Not provided"));
+        appendText(details, "p", "", "Student: " + (row.user_id ? (row.student_name || "Unknown student") : "Account deleted"));
+        appendText(details, "p", "", "Branch: " + (row.user_id ? (row.student_branch || "Not provided") : "Not available"));
     }
     appendText(details, "p", "", "Category: " + categoryLabel(row.category));
     appendText(details, "p", "", "Location: " + row.location);
@@ -713,6 +750,16 @@ function makeComplaintCard(row, mode = "student") {
         save.textContent = "Save update";
         form.append(statusLabelElement, noteLabel, save);
         card.append(form);
+    }
+
+    if (management && state.profile?.role === "owner") {
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "danger-button owner-delete-complaint";
+        remove.dataset.complaintId = row.id;
+        remove.dataset.ticketNumber = String(row.ticket_number);
+        remove.textContent = "Delete complaint";
+        card.append(remove);
     }
 
     return card;
@@ -880,6 +927,15 @@ async function loadAndRenderAccounts() {
             save.textContent = "Save access";
             form.append(label, save);
             card.append(form);
+            if (state.profile.role === "owner") {
+                const remove = document.createElement("button");
+                remove.type = "button";
+                remove.className = "danger-button owner-delete-account";
+                remove.dataset.userId = profile.id;
+                remove.dataset.accountName = profile.full_name || profile.email || "Campus user";
+                remove.textContent = "Delete account";
+                card.append(remove);
+            }
             container.append(card);
         }
     } catch (error) {
@@ -973,7 +1029,9 @@ byId("signin-form").addEventListener("submit", (event) => {
         if (error) throw error;
         await applySession(data.session);
         await uploadPendingStudentIdCard();
-        if (data.session) setMessage("Signed in successfully.", "success");
+        if (data.session && state.profile && roleForProfile(state.profile) === state.selectedPortal) {
+            setMessage("Signed in successfully.", "success");
+        }
     }, "Signing in…");
 });
 
@@ -1290,6 +1348,56 @@ document.addEventListener("submit", (event) => {
             button.disabled = false;
             button.textContent = originalLabel;
         });
+});
+
+document.addEventListener("click", (event) => {
+    const button = event.target.closest(".owner-delete-complaint");
+    if (!button || state.profile?.role !== "owner") return;
+    const ticket = "CC-" + String(button.dataset.ticketNumber).padStart(6, "0");
+    if (!window.confirm("Permanently delete complaint " + ticket + "? This cannot be undone.")) return;
+    button.disabled = true;
+    button.textContent = "Deleting…";
+    deleteComplaint(button.dataset.complaintId).then(() => {
+        setMessage("Complaint " + ticket + " deleted.", "success");
+        return Promise.all([
+            loadAndRenderComplaints("management"),
+            loadAndRenderComplaints("resolution")
+        ]);
+    }).catch((error) => {
+        setMessage(formatError(error), "error");
+    }).finally(() => {
+        button.disabled = false;
+        button.textContent = "Delete complaint";
+    });
+});
+
+document.addEventListener("click", (event) => {
+    const button = event.target.closest(".owner-delete-account");
+    if (!button || state.profile?.role !== "owner") return;
+    const accountName = button.dataset.accountName || "this account";
+    if (!window.confirm(
+        "Permanently delete " + accountName + "'s login/account? Existing complaint records will remain, with the account unlinked. This cannot be undone."
+    )) return;
+    button.disabled = true;
+    button.textContent = "Deleting…";
+    deleteAccount(button.dataset.userId).then((result) => {
+        const preserved = Number(result?.preserved_complaints ?? 0);
+        setMessage(
+            accountName + "'s account deleted. " + preserved +
+            " complaint record(s) remain without the account link.",
+            "success"
+        );
+        return Promise.all([
+            loadAndRenderAccounts(),
+            loadAndRenderComplaints("management"),
+            loadAndRenderComplaints("resolution")
+        ]);
+    }).catch((error) => {
+        setMessage(formatError(error), "error");
+    }).finally(() => {
+        button.disabled = false;
+        button.textContent = "Delete account";
+    });
 });
 
 document.addEventListener("submit", (event) => {
