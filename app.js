@@ -186,6 +186,22 @@ export async function updateComplaint({ id, status, adminNote }) {
     return Array.isArray(data) ? data[0] : data;
 }
 
+export async function deleteComplaint(complaintId) {
+    const { data, error } = await requireClient().rpc("owner_delete_complaint", {
+        target_complaint_id: complaintId
+    });
+    if (error) throw error;
+    return Array.isArray(data) ? data[0] : data;
+}
+
+export async function deleteAccount(userId) {
+    const { data, error } = await requireClient().rpc("owner_delete_account", {
+        target_user_id: userId
+    });
+    if (error) throw error;
+    return Array.isArray(data) ? data[0] : data;
+}
+
 const PRIVATE_EVIDENCE_BUCKET = "campuscare-private";
 const WORK_PROOF_TYPES = new Set([
     "image/jpeg", "image/png", "image/webp", "image/gif", "image/heic", "image/heif",
