@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+database.db
+model/*.joblib
+model/metrics.json
+work/
+.env
+
