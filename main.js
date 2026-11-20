@@ -2,6 +2,7 @@ import {
     assignComplaint,
     attachComplaintProof,
     COMPLAINT_PROOF_MAX_BYTES,
+    createManagementAccount,
     createComplaint,
     deleteAccount,
     deleteComplaint,
@@ -15,6 +16,7 @@ import {
     registerEmployee,
     setProfileRole,
     registerStudent,
+    resendSignupOtp,
     requestPasswordReset,
     signIn,
     signOut,
@@ -22,6 +24,7 @@ import {
     updateComplaint,
     updatePassword,
     updateOwnBranch,
+    verifyEmailOtp,
     uploadStudentIdCard,
     uploadWorkProof,
     validateIdCard,
@@ -32,6 +35,12 @@ const PAGE_SIZE = 10;
 let selectedProofFile = null;
 let selectedProofPreviewUrl = "";
 let pendingIdCardFile = null;
+let pendingVerification = null;
+let invitePasswordPortal = null;
+let inviteVerificationInProgress = false;
+let sessionApplyVersion = 0;
+let lastRenderedSessionKey = "";
+const complaintRenderVersions = new Map();
 let proofCameraStream = null;
 let proofRecorder = null;
 let proofRecordingChunks = [];
@@ -110,7 +119,7 @@ function setBusy(form, busy, busyLabel = "Working…") {
 function formatError(error) {
     const message = String(error?.message || "Something went wrong.");
     if (/invalid login credentials/i.test(message)) return "Email or password is incorrect.";
-    if (/email not confirmed/i.test(message)) return "Please verify your email from the link we sent before signing in.";
+    if (/email not confirmed/i.test(message)) return "Enter the 6-digit email code first, then sign in.";
     if (/user already registered/i.test(message)) return "An account already exists for this email. Sign in instead.";
     if (/password.*(weak|short|characters)/i.test(message)) return "Choose a stronger password with at least 10 characters.";
     if (/failed to fetch|network/i.test(message)) return "Could not reach Supabase. Check the project URL, key, and internet connection.";
@@ -172,12 +181,14 @@ function setAuthView(view) {
     byId("signup-form").hidden = view !== "signup";
     byId("employee-signup-form").hidden = view !== "signup" || state.selectedPortal !== "employee";
     byId("signup-form").hidden = view !== "signup" || state.selectedPortal !== "student";
+    byId("verify-email-form").hidden = view !== "verify";
     byId("reset-form").hidden = view !== "reset";
     byId("update-password-form").hidden = view !== "update";
     byId("show-signup").hidden = view !== "signin" || !["student", "employee"].includes(state.selectedPortal);
     byId("show-signup").textContent = state.selectedPortal === "employee" ? "Create an employee account" : "Create a student account";
     byId("forgot-password").hidden = view !== "signin";
     byId("show-signin").hidden = view === "signin";
+    byId("resend-email-otp").hidden = view !== "verify" || pendingVerification?.type === "invite";
     if (view === "signin") {
         byId("auth-intro").textContent = state.selectedPortal === "student"
             ? "Sign in to submit complaints and track your reports."
@@ -190,6 +201,11 @@ function setAuthView(view) {
             : "Create a student account. Management reviews your college ID before portal access is enabled.";
     } else if (view === "reset") {
         byId("auth-intro").textContent = "Request a secure password reset link.";
+    } else if (view === "verify") {
+        byId("auth-intro").textContent = "Verify your email to finish creating your account.";
+        byId("verify-email-description").textContent = pendingVerification?.type === "invite"
+            ? "Enter the 6-digit invitation code sent to " + (pendingVerification.email || "your email") + "."
+            : "Enter the 6-digit code sent to " + (pendingVerification?.email || "your email") + ".";
     } else {
         byId("auth-intro").textContent = "Set a new password for your account.";
     }
@@ -231,6 +247,7 @@ function renderSession() {
     setSignedInLayout(true);
     const actualPortal = roleForProfile(state.profile);
     state.selectedPortal = actualPortal;
+    lastRenderedSessionKey = state.user.id + ":" + actualPortal;
 
     if (actualPortal === "pending") {
         authArea.hidden = true;
@@ -238,12 +255,14 @@ function renderSession() {
         sessionError.hidden = true;
         roleMismatch.hidden = true;
         byId("approval-pending").hidden = false;
-        const isStudentRequest = state.profile.requested_role !== "employee";
+        const isStudentRequest = state.profile.requested_role === "student";
         byId("approval-pending-text").textContent = isStudentRequest
             ? (state.profile.id_card_path
                 ? "Your student account and college ID are waiting for management approval."
                 : "Your student account is waiting for approval. Upload your college ID card so management can review it.")
-            : "Your employee account is waiting for management approval. Once approved, assigned work will appear here.";
+            : state.profile.requested_role === "admin"
+                ? "Your management account is waiting for owner approval."
+                : "Your employee account is waiting for management approval. Once approved, assigned work will appear here.";
         byId("approval-id-card-form").hidden = !isStudentRequest || Boolean(state.profile.id_card_path);
         byId("portal-title").textContent = "Account pending approval";
         byId("portal-kicker").textContent = "Awaiting management review";
@@ -268,8 +287,13 @@ function renderSession() {
     byId("management-tools").hidden = actualPortal !== "admin";
     byId("employee-tools").hidden = actualPortal !== "employee";
     byId("management-account-hint").textContent = state.profile.role === "owner"
-        ? "Review students and employees, then choose Pending, Student, Employee, or Admin. Only the owner can assign Admin access."
-        : "Review student and employee requests. Admin access can only be assigned by the owner.";
+        ? "Invite accounts and review student, employee, and admin requests. Only the owner can approve Admin access."
+        : "Invite students or employees and review their requests. Only the owner can approve Admin access.";
+    byId("management-create-role").querySelector('[data-owner-only]').hidden = state.profile.role !== "owner";
+    if (state.profile.role !== "owner" && byId("management-create-role").value === "admin") {
+        byId("management-create-role").value = "student";
+    }
+    updateManagementCreateFields();
     state.managementTab = "queue";
     setManagementTab("queue");
     setMessage("");
@@ -288,11 +312,12 @@ function renderSession() {
 }
 
 async function applySession(session) {
-    state.user = session?.user ?? null;
-    state.profile = null;
-    state.profileError = null;
-
-    if (!state.user) {
+    const version = ++sessionApplyVersion;
+    const nextUser = session?.user ?? null;
+    if (!nextUser) {
+        state.user = null;
+        state.profile = null;
+        lastRenderedSessionKey = "";
         setSignedInLayout(false);
         dashboard.hidden = true;
         roleMismatch.hidden = true;
@@ -301,8 +326,24 @@ async function applySession(session) {
         return;
     }
 
+    if (state.user?.id === nextUser.id && state.profile) {
+        const approvedPortal = roleForProfile(state.profile);
+        if (approvedPortal !== "pending" && approvedPortal !== state.selectedPortal) {
+            showRoleMismatch(state.selectedPortal);
+        } else if (lastRenderedSessionKey !== nextUser.id + ":" + approvedPortal) {
+            renderSession();
+        }
+        return;
+    }
+
+    state.user = nextUser;
+    state.profile = null;
+    state.profileError = null;
+
     try {
-        state.profile = await getProfile(state.user.id);
+        const profile = await getProfile(nextUser.id);
+        if (version !== sessionApplyVersion || state.user?.id !== nextUser.id) return;
+        state.profile = profile;
         const approvedPortal = roleForProfile(state.profile);
         if (!state.selectedPortal) {
             state.selectedPortal = approvedPortal;
@@ -314,6 +355,7 @@ async function applySession(session) {
         }
         renderSession();
     } catch (error) {
+        if (version !== sessionApplyVersion || state.user?.id !== nextUser.id) return;
         showSessionError(error);
     }
 }
@@ -766,6 +808,9 @@ function makeComplaintCard(row, mode = "student") {
 }
 
 async function loadAndRenderComplaints(audience) {
+    const renderVersion = (complaintRenderVersions.get(audience) || 0) + 1;
+    complaintRenderVersions.set(audience, renderVersion);
+    const currentUserId = state.user?.id;
     const isManagement = audience === "management" || audience === "resolution";
     const isResolution = audience === "resolution";
     const isEmployee = audience === "employee";
@@ -791,16 +836,24 @@ async function loadAndRenderComplaints(audience) {
             excludeStatus: audience === "management" && state.managementFilters.status !== "work_completed" ? "work_completed" : "",
             ...filters
         });
-        loading.remove();
+        if (complaintRenderVersions.get(audience) !== renderVersion || state.user?.id !== currentUserId) return;
+
+        // A complaint is identified by its database ID and ticket number. Keep
+        // one card for each report even if a response contains repeated rows.
+        result.rows = [...new Map(result.rows.map((row) => [row.id || row.ticket_number, row])).values()];
 
         if (isManagement && result.rows.length) {
             const submitters = await loadComplaintSubmitters(result.rows.map((row) => row.user_id));
+            if (complaintRenderVersions.get(audience) !== renderVersion || state.user?.id !== currentUserId) return;
             const profilesById = new Map(submitters.map((profile) => [profile.id, profile]));
             result.rows = result.rows.map((row) => {
                 const profile = profilesById.get(row.user_id);
                 return { ...row, student_name: profile?.full_name, student_branch: profile?.branch };
             });
         }
+
+        if (complaintRenderVersions.get(audience) !== renderVersion || state.user?.id !== currentUserId) return;
+        container.replaceChildren();
 
         if (!result.rows.length) {
             appendText(container, "p", "empty-state", "No complaints found.");
@@ -821,9 +874,23 @@ async function loadAndRenderComplaints(audience) {
         byId(isManagement ? "management-prev" : "student-prev").disabled = page <= 0;
         byId(isManagement ? "management-next" : "student-next").disabled = page + 1 >= pageCount;
     } catch (error) {
+        if (complaintRenderVersions.get(audience) !== renderVersion || state.user?.id !== currentUserId) return;
+        container.replaceChildren();
         loading.remove();
         appendText(container, "p", "empty-state", "Could not load complaints. " + formatError(error));
     }
+}
+
+function updateManagementCreateFields() {
+    const role = byId("management-create-role").value;
+    const studentFields = byId("management-create-student-fields");
+    const employeeFields = byId("management-create-employee-fields");
+    studentFields.hidden = role !== "student";
+    employeeFields.hidden = role !== "employee";
+    byId("management-create-college-id").required = role === "student";
+    byId("management-create-branch").required = role === "student";
+    byId("management-create-phone").required = role === "employee";
+    byId("management-create-work-category").required = role === "employee";
 }
 
 function setManagementTab(tab) {
@@ -869,7 +936,8 @@ async function loadAndRenderAccounts() {
             if (profile.branch) appendText(card, "p", "muted", "Branch: " + profile.branch);
             if (profile.phone) appendText(card, "p", "muted", "Mobile: " + profile.phone);
             if (profile.work_category) appendText(card, "p", "muted", "Work category: " + profile.work_category);
-            appendText(card, "p", "muted", "Request type: " + (profile.requested_role === "employee" ? "Employee" : "Student"));
+            const requestLabel = profile.requested_role === "employee" ? "Employee" : profile.requested_role === "admin" ? "Admin" : "Student";
+            appendText(card, "p", "muted", "Request type: " + requestLabel);
             if (profile.id_card_path) {
                 const cardLink = document.createElement("a");
                 cardLink.href = "#";
@@ -981,6 +1049,35 @@ for (const button of document.querySelectorAll("[data-management-tab]")) {
     button.addEventListener("click", () => setManagementTab(button.dataset.managementTab));
 }
 
+byId("management-create-role").addEventListener("change", updateManagementCreateFields);
+byId("management-create-account-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    if (!["owner", "admin"].includes(state.profile?.role)) {
+        setMessage("Only management can invite accounts.", "error");
+        return;
+    }
+    const values = new FormData(form);
+    const details = {
+        full_name: values.get("full_name").trim(),
+        email: values.get("email").trim(),
+        requested_role: values.get("requested_role"),
+        college_id: values.get("college_id").trim(),
+        branch: values.get("branch").trim(),
+        phone: values.get("phone").trim(),
+        work_category: values.get("work_category")
+    };
+    handleAuthSubmit(form, async () => {
+        const result = await createManagementAccount(details);
+        form.reset();
+        updateManagementCreateFields();
+        form.closest("details").open = false;
+        setMessage("Invitation sent to " + result.email + ". The account is pending approval.", "success");
+        await loadAndRenderAccounts();
+    }, "Sending invitation…");
+});
+updateManagementCreateFields();
+
 byId("portal-back").addEventListener("click", () => {
     portalPanel.hidden = true;
     setPortalMessage("");
@@ -1055,9 +1152,11 @@ byId("signup-form").addEventListener("submit", (event) => {
             await uploadPendingStudentIdCard();
             setMessage(state.profile?.role === "pending" ? "Account created. Your request is waiting for management approval." : "Your account is ready. You are signed in.", "success");
         } else {
-            setMessage("Account created. Verify your email, sign in, and upload the ID card if it did not upload automatically.", "success");
-            setAuthView("signin");
-            byId("signin-email").value = email;
+            pendingVerification = { email, type: "signup", portal: "student" };
+            byId("email-otp").value = "";
+            showAuth();
+            setAuthView("verify");
+            setMessage("Enter the 6-digit code sent to " + email + ".", "success");
         }
     }, "Creating account…");
 });
@@ -1078,11 +1177,65 @@ byId("employee-signup-form").addEventListener("submit", (event) => {
             await applySession(data.session);
             setMessage("Employee account created. It will open after management approves it.", "success");
         } else {
-            setMessage("Employee account created. Verify your email, then wait for management approval.", "success");
-            setAuthView("signin");
-            byId("signin-email").value = email;
+            pendingVerification = { email, type: "signup", portal: "employee" };
+            byId("email-otp").value = "";
+            showAuth();
+            setAuthView("verify");
+            setMessage("Enter the 6-digit code sent to " + email + ".", "success");
         }
     }, "Requesting account…");
+});
+
+byId("verify-email-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const token = new FormData(form).get("token").trim();
+    const verification = pendingVerification;
+    if (!verification?.email) {
+        setMessage("Start account creation again to request a new code.", "error");
+        return;
+    }
+    handleAuthSubmit(form, async () => {
+        inviteVerificationInProgress = verification.type === "invite";
+        let data;
+        try {
+            const result = await verifyEmailOtp(verification.email, token, verification.type);
+            if (result.error) throw result.error;
+            data = result.data;
+        } catch (error) {
+            inviteVerificationInProgress = false;
+            throw error;
+        }
+        if (verification.type === "invite") {
+            const requestedRole = data.user?.user_metadata?.requested_role;
+            invitePasswordPortal = requestedRole === "employee" ? "employee" : requestedRole === "admin" ? "admin" : "student";
+            state.selectedPortal = invitePasswordPortal;
+            inviteVerificationInProgress = false;
+            pendingVerification = null;
+            showAuth();
+            setAuthView("update");
+            setMessage("Email verified. Create a password for your account.", "success");
+            return;
+        }
+        pendingVerification = null;
+        if (data.session) {
+            await applySession(data.session);
+            await uploadPendingStudentIdCard();
+            setMessage(state.profile?.role === "pending" ? "Email verified. Your account is waiting for management approval." : "Email verified. Your account is ready.", "success");
+        } else {
+            setAuthView("signin");
+            byId("signin-email").value = verification.email;
+            setMessage("Email verified. Sign in with the password you created.", "success");
+        }
+    }, "Verifying…");
+});
+
+byId("resend-email-otp").addEventListener("click", () => {
+    if (!pendingVerification?.email || pendingVerification.type !== "signup") return;
+    resendSignupOtp(pendingVerification.email).then(({ error }) => {
+        if (error) throw error;
+        setMessage("A new 6-digit code was sent to " + pendingVerification.email + ".", "success");
+    }).catch((error) => setMessage(formatError(error), "error"));
 });
 
 async function uploadPendingStudentIdCard() {
@@ -1128,6 +1281,7 @@ byId("update-password-form").addEventListener("submit", (event) => {
     event.preventDefault();
     const form = event.currentTarget;
     const password = new FormData(form).get("password");
+    const returnPortal = invitePasswordPortal || state.selectedPortal || "student";
     handleAuthSubmit(form, async () => {
         const { error } = await updatePassword(password);
         if (error) throw error;
@@ -1135,7 +1289,9 @@ byId("update-password-form").addEventListener("submit", (event) => {
         if (signOutError) throw signOutError;
         state.user = null;
         state.profile = null;
-        state.selectedPortal = "student";
+        lastRenderedSessionKey = "";
+        invitePasswordPortal = null;
+        state.selectedPortal = returnPortal;
         setAuthView("signin");
         setMessage("Password updated. Sign in with your new password.", "success");
     }, "Updating…");
@@ -1452,6 +1608,18 @@ if (!isSupabaseConfigured) {
     setPortalMessage("Supabase setup is required before accounts and complaints can be used. See README.md.");
 }
 
+const invitationParams = new URLSearchParams(window.location.search);
+if (invitationParams.get("verify") === "invite") {
+    const invitedEmail = invitationParams.get("email") || "";
+    pendingVerification = { email: invitedEmail, type: "invite", portal: "student" };
+    state.selectedPortal = "student";
+    byId("email-otp").value = "";
+    showPortal("student");
+    setAuthView("verify");
+    if (invitedEmail) byId("verify-email-description").textContent = "Enter the 6-digit invitation code sent to " + invitedEmail + ".";
+    window.history.replaceState(null, "", window.location.pathname);
+}
+
 if (supabase) {
     supabase.auth.onAuthStateChange((event, session) => {
         if (event === "PASSWORD_RECOVERY") {
@@ -1461,6 +1629,7 @@ if (supabase) {
             setMessage("Choose a new password to finish resetting your account.");
             return;
         }
+        if (inviteVerificationInProgress) return;
         window.setTimeout(() => applySession(session), 0);
     });
 
@@ -1472,3 +1641,4 @@ if (supabase) {
         if (data.session) applySession(data.session);
     });
 }
+
