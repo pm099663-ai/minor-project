@@ -168,9 +168,9 @@
                         <button type="submit" class="form-submit">Request management account</button>
                     </form>
                     <form id="verify-email-form" class="form-grid" hidden>
-                        <p id="verify-email-description" class="form-description">Enter the 6-digit code sent to your email.</p>
+                        <p id="verify-email-description" class="form-description">Enter the verification code sent to your email.</p>
                         <label for="email-otp">Email verification code</label>
-                        <input id="email-otp" name="token" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" minlength="6" maxlength="6" required>
+                        <input id="email-otp" name="token" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,8}" minlength="6" maxlength="8" required>
                         <button type="submit" class="form-submit">Verify email</button>
                         <button type="button" id="resend-email-otp" class="text-button">Resend code</button>
                     </form>
