@@ -2,7 +2,6 @@ import {
     assignComplaint,
     attachComplaintProof,
     COMPLAINT_PROOF_MAX_BYTES,
-    createManagementAccount,
     createComplaint,
     deleteAccount,
     deleteComplaint,
@@ -300,13 +299,8 @@ function renderSession() {
     byId("management-tools").hidden = actualPortal !== "admin";
     byId("employee-tools").hidden = actualPortal !== "employee";
     byId("management-account-hint").textContent = state.profile.role === "owner"
-        ? "Invite accounts and review student, employee, and admin requests. Only the owner can approve Admin access."
-        : "Invite students or employees and review their requests. Only the owner can approve Admin access.";
-    byId("management-create-role").querySelector('[data-owner-only]').hidden = state.profile.role !== "owner";
-    if (state.profile.role !== "owner" && byId("management-create-role").value === "admin") {
-        byId("management-create-role").value = "student";
-    }
-    updateManagementCreateFields();
+        ? "Review student, employee, and management account requests. Only the owner can approve Admin access."
+        : "Review student and employee account requests. Only the owner can approve Admin access.";
     state.managementTab = "queue";
     setManagementTab("queue");
     setMessage("");
@@ -894,18 +888,6 @@ async function loadAndRenderComplaints(audience) {
     }
 }
 
-function updateManagementCreateFields() {
-    const role = byId("management-create-role").value;
-    const studentFields = byId("management-create-student-fields");
-    const employeeFields = byId("management-create-employee-fields");
-    studentFields.hidden = role !== "student";
-    employeeFields.hidden = role !== "employee";
-    byId("management-create-college-id").required = role === "student";
-    byId("management-create-branch").required = role === "student";
-    byId("management-create-phone").required = role === "employee";
-    byId("management-create-work-category").required = role === "employee";
-}
-
 function setManagementTab(tab) {
     state.managementTab = tab;
     for (const button of document.querySelectorAll("[data-management-tab]")) {
@@ -1062,37 +1044,6 @@ for (const link of document.querySelectorAll('a[href="#portal"]')) {
 for (const button of document.querySelectorAll("[data-management-tab]")) {
     button.addEventListener("click", () => setManagementTab(button.dataset.managementTab));
 }
-
-byId("management-create-role").addEventListener("change", updateManagementCreateFields);
-byId("management-create-account-form").addEventListener("submit", (event) => {
-    event.preventDefault();
-    const form = event.currentTarget;
-    if (!["owner", "admin"].includes(state.profile?.role)) {
-        setMessage("Only management can invite accounts.", "error");
-        return;
-    }
-    const values = new FormData(form);
-    const details = {
-        full_name: values.get("full_name").trim(),
-        email: values.get("email").trim(),
-        requested_role: values.get("requested_role"),
-        department: values.get("department").trim(),
-        id_card: values.get("id_card"),
-        college_id: values.get("college_id").trim(),
-        branch: values.get("branch").trim(),
-        phone: values.get("phone").trim(),
-        work_category: values.get("work_category")
-    };
-    handleAuthSubmit(form, async () => {
-        const result = await createManagementAccount(details);
-        form.reset();
-        updateManagementCreateFields();
-        form.closest("details").open = false;
-        setMessage("Invitation sent to " + result.email + ". The account is pending approval.", "success");
-        await loadAndRenderAccounts();
-    }, "Sending invitation…");
-});
-updateManagementCreateFields();
 
 byId("portal-back").addEventListener("click", () => {
     portalPanel.hidden = true;
@@ -1687,3 +1638,4 @@ if (supabase) {
         if (data.session) applySession(data.session);
     });
 }
+

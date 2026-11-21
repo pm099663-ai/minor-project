@@ -55,33 +55,6 @@ export async function resendSignupOtp(email) {
     return requireClient().auth.resend({ type: "signup", email });
 }
 
-export async function createManagementAccount(details) {
-    validateIdCard(details.id_card);
-    const client = requireClient();
-    const { data: sessionData, error: sessionError } = await client.auth.getSession();
-    if (sessionError) throw sessionError;
-    if (!sessionData.session?.access_token) throw new Error("Sign in with a management account first.");
-
-    const body = new FormData();
-    for (const [key, value] of Object.entries(details)) {
-        if (key === "id_card") continue;
-        body.append(key, String(value ?? ""));
-    }
-    body.append("id_card", details.id_card, details.id_card.name);
-
-    const response = await fetch(supabaseUrl + "/functions/v1/create-account", {
-        method: "POST",
-        headers: {
-            apikey: publishableKey,
-            Authorization: "Bearer " + sessionData.session.access_token
-        },
-        body
-    });
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(result.error || "Could not send the account invitation.");
-    return result;
-}
-
 export async function registerEmployee(email, password, fullName, phone, workCategory) {
     return requireClient().auth.signUp({
         email,
@@ -354,3 +327,4 @@ export async function assignComplaint(complaintId, employeeId) {
     });
     return { assignment: assigned, notificationError };
 }
+
