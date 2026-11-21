@@ -99,9 +99,9 @@
                 <div id="approval-pending" class="state-card" hidden>
                     <p id="approval-pending-text">Your account is waiting for approval.</p>
                     <form id="approval-id-card-form" class="form-grid" hidden>
-                        <label for="approval-id-card">College ID card image or PDF</label>
+                        <label id="approval-id-card-label" for="approval-id-card">College ID card image or PDF</label>
                         <input id="approval-id-card" name="id_card" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf" required>
-                        <button type="submit" class="secondary-button">Upload college ID</button>
+                        <button id="approval-id-card-submit" type="submit" class="secondary-button">Upload college ID</button>
                     </form>
                     <button type="button" id="approval-pending-signout" class="secondary-button">Sign out</button>
                 </div>                <div id="auth-area" class="auth-card">
@@ -152,6 +152,20 @@
                         <input id="employee-signup-password" name="password" type="password" autocomplete="new-password" minlength="10" required>
                         <p class="field-hint">Your account needs approval before assigned work appears here.</p>
                         <button type="submit" class="form-submit">Request employee account</button>
+                    </form>
+                    <form id="admin-signup-form" class="form-grid" hidden>
+                        <label for="admin-signup-name">Full name</label>
+                        <input id="admin-signup-name" name="full_name" type="text" autocomplete="name" maxlength="100" required>
+                        <label for="admin-signup-department">Department</label>
+                        <input id="admin-signup-department" name="department" type="text" autocomplete="organization-title" maxlength="100" required>
+                        <label for="admin-signup-id-card">ID card image or PDF</label>
+                        <input id="admin-signup-id-card" name="id_card" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf" required>
+                        <label for="admin-signup-email">Email address</label>
+                        <input id="admin-signup-email" name="email" type="email" autocomplete="email" maxlength="254" required>
+                        <label for="admin-signup-password">Password</label>
+                        <input id="admin-signup-password" name="password" type="password" autocomplete="new-password" minlength="10" required>
+                        <p class="field-hint">Enter the email verification code. Your management access starts only after the owner approves your request.</p>
+                        <button type="submit" class="form-submit">Request management account</button>
                     </form>
                     <form id="verify-email-form" class="form-grid" hidden>
                         <p id="verify-email-description" class="form-description">Enter the 6-digit code sent to your email.</p>

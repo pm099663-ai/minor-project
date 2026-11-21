@@ -14,6 +14,7 @@ import {
     loadComplaintSubmitters,
     listProfilesForManagement,
     registerEmployee,
+    registerManagementCandidate,
     setProfileRole,
     registerStudent,
     resendSignupOtp,
@@ -181,11 +182,16 @@ function setAuthView(view) {
     byId("signup-form").hidden = view !== "signup";
     byId("employee-signup-form").hidden = view !== "signup" || state.selectedPortal !== "employee";
     byId("signup-form").hidden = view !== "signup" || state.selectedPortal !== "student";
+    byId("admin-signup-form").hidden = view !== "signup" || state.selectedPortal !== "admin";
     byId("verify-email-form").hidden = view !== "verify";
     byId("reset-form").hidden = view !== "reset";
     byId("update-password-form").hidden = view !== "update";
-    byId("show-signup").hidden = view !== "signin" || !["student", "employee"].includes(state.selectedPortal);
-    byId("show-signup").textContent = state.selectedPortal === "employee" ? "Create an employee account" : "Create a student account";
+    byId("show-signup").hidden = view !== "signin" || !["student", "employee", "admin"].includes(state.selectedPortal);
+    byId("show-signup").textContent = state.selectedPortal === "employee"
+        ? "Create an employee account"
+        : state.selectedPortal === "admin"
+            ? "Create a management account"
+            : "Create a student account";
     byId("forgot-password").hidden = view !== "signin";
     byId("show-signin").hidden = view === "signin";
     byId("resend-email-otp").hidden = view !== "verify" || pendingVerification?.type === "invite";
@@ -198,7 +204,9 @@ function setAuthView(view) {
     } else if (view === "signup") {
         byId("auth-intro").textContent = state.selectedPortal === "employee"
             ? "Request an employee account. Management reviews it before work access is enabled."
-            : "Create a student account. Management reviews your college ID before portal access is enabled.";
+            : state.selectedPortal === "admin"
+                ? "Create a management account request. The owner reviews your name, department, and ID card before granting access."
+                : "Create a student account. Management reviews your college ID before portal access is enabled.";
     } else if (view === "reset") {
         byId("auth-intro").textContent = "Request a secure password reset link.";
     } else if (view === "verify") {
@@ -261,9 +269,14 @@ function renderSession() {
                 ? "Your student account and college ID are waiting for management approval."
                 : "Your student account is waiting for approval. Upload your college ID card so management can review it.")
             : state.profile.requested_role === "admin"
-                ? "Your management account is waiting for owner approval."
+                ? (state.profile.id_card_path
+                    ? "Your management account and ID card are waiting for owner approval."
+                    : "Your management account is waiting for approval. Upload an ID card image or PDF so the owner can review it.")
                 : "Your employee account is waiting for management approval. Once approved, assigned work will appear here.";
-        byId("approval-id-card-form").hidden = !isStudentRequest || Boolean(state.profile.id_card_path);
+        const needsIdCard = ["student", "admin"].includes(state.profile.requested_role);
+        byId("approval-id-card-form").hidden = !needsIdCard || Boolean(state.profile.id_card_path);
+        byId("approval-id-card-label").textContent = isStudentRequest ? "College ID card image or PDF" : "ID card image or PDF";
+        byId("approval-id-card-submit").textContent = isStudentRequest ? "Upload college ID" : "Upload ID card";
         byId("portal-title").textContent = "Account pending approval";
         byId("portal-kicker").textContent = "Awaiting management review";
         return;
@@ -957,8 +970,8 @@ async function loadAndRenderAccounts() {
                     }
                 });
                 card.append(cardLink);
-            } else if (profile.role === "pending" && profile.requested_role === "student") {
-                appendText(card, "p", "field-hint", "College ID card not uploaded yet.");
+            } else if (profile.role === "pending" && ["student", "admin"].includes(profile.requested_role)) {
+                appendText(card, "p", "field-hint", profile.requested_role === "admin" ? "ID card not uploaded yet." : "College ID card not uploaded yet.");
             }
 
             if (profile.role === "owner") {
@@ -981,7 +994,7 @@ async function loadAndRenderAccounts() {
             const select = document.createElement("select");
             select.name = "role";
             const accessOptions = [["pending", "Pending approval"], ["student", "Student"], ["employee", "Employee"]];
-            if (state.profile.role === "owner") accessOptions.push(["admin", "Admin"]);
+            if (state.profile.role === "owner" && profile.requested_role === "admin") accessOptions.push(["admin", "Admin"]);
             for (const [value, text] of accessOptions) {
                 const option = document.createElement("option");
                 option.value = value;
@@ -1128,7 +1141,7 @@ byId("signin-form").addEventListener("submit", (event) => {
         const { data, error } = await signIn(email, password);
         if (error) throw error;
         await applySession(data.session);
-        await uploadPendingStudentIdCard();
+        await uploadPendingIdCard();
         if (data.session && state.profile && roleForProfile(state.profile) === state.selectedPortal) {
             setMessage("Signed in successfully.", "success");
         }
@@ -1152,7 +1165,7 @@ byId("signup-form").addEventListener("submit", (event) => {
         pendingIdCardFile = idCardFile;
         if (data.session) {
             await applySession(data.session);
-            await uploadPendingStudentIdCard();
+            await uploadPendingIdCard();
             setMessage(state.profile?.role === "pending" ? "Account created. Your request is waiting for management approval." : "Your account is ready. You are signed in.", "success");
         } else {
             pendingVerification = { email, type: "signup", portal: "student" };
@@ -1189,6 +1202,34 @@ byId("employee-signup-form").addEventListener("submit", (event) => {
     }, "Requesting account…");
 });
 
+byId("admin-signup-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const values = new FormData(form);
+    const fullName = values.get("full_name").trim();
+    const department = values.get("department").trim();
+    const idCardFile = values.get("id_card");
+    const email = values.get("email").trim();
+    const password = values.get("password");
+    handleAuthSubmit(form, async () => {
+        validateIdCard(idCardFile);
+        const { data, error } = await registerManagementCandidate(email, password, fullName, department);
+        if (error) throw error;
+        pendingIdCardFile = idCardFile;
+        if (data.session) {
+            await applySession(data.session);
+            await uploadPendingIdCard();
+            setMessage("Management account request created. The owner must approve it before you can manage the portal.", "success");
+        } else {
+            pendingVerification = { email, type: "signup", portal: "admin" };
+            byId("email-otp").value = "";
+            showAuth();
+            setAuthView("verify");
+            setMessage("Enter the 6-digit code sent to " + email + ".", "success");
+        }
+    }, "Requesting management account…");
+});
+
 byId("verify-email-form").addEventListener("submit", (event) => {
     event.preventDefault();
     const form = event.currentTarget;
@@ -1223,7 +1264,7 @@ byId("verify-email-form").addEventListener("submit", (event) => {
         pendingVerification = null;
         if (data.session) {
             await applySession(data.session);
-            await uploadPendingStudentIdCard();
+            await uploadPendingIdCard();
             setMessage(state.profile?.role === "pending" ? "Email verified. Your account is waiting for management approval." : "Email verified. Your account is ready.", "success");
         } else {
             setAuthView("signin");
@@ -1241,7 +1282,7 @@ byId("resend-email-otp").addEventListener("click", () => {
     }).catch((error) => setMessage(formatError(error), "error"));
 });
 
-async function uploadPendingStudentIdCard() {
+async function uploadPendingIdCard() {
     if (!pendingIdCardFile || !state.user || !state.profile || state.profile.requested_role === "employee" || state.profile.id_card_path) return;
     await uploadStudentIdCard({ userId: state.user.id, file: pendingIdCardFile });
     state.profile.id_card_path = "uploaded";
@@ -1258,7 +1299,9 @@ async function submitStudentIdCard(form) {
     state.profile.id_card_mime_type = file.type;
     form.reset();
     renderSession();
-    setMessage("College ID uploaded. Management can now review your account.", "success");
+    setMessage(state.profile.requested_role === "admin"
+        ? "ID card uploaded. The owner can now review your management request."
+        : "College ID uploaded. Management can now review your account.", "success");
 }
 
 for (const formId of ["approval-id-card-form", "student-id-card-form"]) {

@@ -93,6 +93,17 @@ export async function registerEmployee(email, password, fullName, phone, workCat
     });
 }
 
+export async function registerManagementCandidate(email, password, fullName, department) {
+    return requireClient().auth.signUp({
+        email,
+        password,
+        options: {
+            data: { full_name: fullName, department, requested_role: "admin" },
+            emailRedirectTo: window.location.href.split("#")[0]
+        }
+    });
+}
+
 export async function signOut() {
     return requireClient().auth.signOut();
 }
