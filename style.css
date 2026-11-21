@@ -193,10 +193,6 @@ footer { padding: 22px; background: #10264a; color: white; text-align: center; f
 .owner-account-list { display: grid; gap: 14px; }
 .owner-account-card { display: grid; gap: 10px; }
 .owner-account-card h5 { font-size: 16px; }
-.management-create-account { margin: 0 0 18px; padding: 16px; border: 1px solid #dce6f2; border-radius: 12px; background: #fbfdff; }
-.management-create-account summary { color: #172b4d; font-weight: 700; cursor: pointer; }
-.management-create-account > p { margin: 10px 0; }
-.management-create-account form { margin-top: 14px; }
 .owner-role-form {
     display: grid; grid-template-columns: minmax(160px, 260px) auto;
     align-items: end; gap: 10px; margin-top: 6px;
@@ -358,4 +354,5 @@ body { background: #fbfcfb; color: var(--campus-ink); font-family: Arial, Helvet
     opacity: .65;
     cursor: wait;
 }
+
 
