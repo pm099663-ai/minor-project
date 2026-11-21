@@ -934,6 +934,7 @@ async function loadAndRenderAccounts() {
             appendText(card, "p", "muted", profile.email || "Email unavailable");
             if (profile.college_id) appendText(card, "p", "muted", "College ID / roll number: " + profile.college_id);
             if (profile.branch) appendText(card, "p", "muted", "Branch: " + profile.branch);
+            if (profile.department) appendText(card, "p", "muted", "Department: " + profile.department);
             if (profile.phone) appendText(card, "p", "muted", "Mobile: " + profile.phone);
             if (profile.work_category) appendText(card, "p", "muted", "Work category: " + profile.work_category);
             const requestLabel = profile.requested_role === "employee" ? "Employee" : profile.requested_role === "admin" ? "Admin" : "Student";
@@ -943,7 +944,7 @@ async function loadAndRenderAccounts() {
                 cardLink.href = "#";
                 cardLink.target = "_blank";
                 cardLink.rel = "noopener noreferrer";
-                cardLink.textContent = "Open college ID card";
+                cardLink.textContent = profile.requested_role === "student" ? "Open college ID card" : "Open ID card";
                 cardLink.addEventListener("click", async (event) => {
                     event.preventDefault();
                     const preview = window.open("about:blank", "_blank");
@@ -1062,6 +1063,8 @@ byId("management-create-account-form").addEventListener("submit", (event) => {
         full_name: values.get("full_name").trim(),
         email: values.get("email").trim(),
         requested_role: values.get("requested_role"),
+        department: values.get("department").trim(),
+        id_card: values.get("id_card"),
         college_id: values.get("college_id").trim(),
         branch: values.get("branch").trim(),
         phone: values.get("phone").trim(),
@@ -1641,4 +1644,3 @@ if (supabase) {
         if (data.session) applySession(data.session);
     });
 }
-

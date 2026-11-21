@@ -42,24 +42,42 @@ Deno.serve(async (request) => {
             return respond(403, { error: "Only management can create account invitations." });
         }
 
-        let body: Record<string, unknown>;
+        let form: FormData;
         try {
-            body = await request.json();
+            form = await request.formData();
         } catch {
             return respond(400, { error: "Enter the account details and try again." });
         }
 
-        const fullName = String(body.full_name || "").trim();
-        const email = String(body.email || "").trim().toLowerCase();
-        const requestedRole = String(body.requested_role || "");
-        const collegeId = String(body.college_id || "").trim();
-        const branch = String(body.branch || "").trim();
-        const phone = String(body.phone || "").trim();
-        const workCategory = String(body.work_category || "").trim();
+        const field = (name: string) => String(form.get(name) || "").trim();
+        const fullName = field("full_name");
+        const email = field("email").toLowerCase();
+        const requestedRole = field("requested_role");
+        const department = field("department");
+        const collegeId = field("college_id");
+        const branch = field("branch");
+        const phone = field("phone");
+        const workCategory = field("work_category");
+        const idCardFile = form.get("id_card");
+        const idCardTypes: Record<string, string> = {
+            "image/jpeg": "jpg",
+            "image/png": "png",
+            "image/webp": "webp",
+            "image/heic": "heic",
+            "image/heif": "heif",
+            "application/pdf": "pdf",
+        };
 
         if (fullName.length < 1 || fullName.length > 100) return respond(400, { error: "Enter a name up to 100 characters." });
         if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return respond(400, { error: "Enter a valid email address." });
         if (!["student", "employee", "admin"].includes(requestedRole)) return respond(400, { error: "Choose Student, Employee, or Admin." });
+        if (department.length < 1 || department.length > 100) return respond(400, { error: "Enter a department up to 100 characters." });
+        if (!(idCardFile instanceof File) || !(idCardFile.type.toLowerCase() in idCardTypes)) {
+            return respond(400, { error: "Upload an ID card image or PDF." });
+        }
+        if (idCardFile.size < 1 || idCardFile.size > 5 * 1024 * 1024) {
+            return respond(400, { error: "The ID card must be smaller than 5 MB." });
+        }
         if (requestedRole === "admin" && actor.role !== "owner") return respond(403, { error: "Only the owner can invite an admin." });
         if (requestedRole === "student" && (collegeId.length > 50 || branch.length > 80)) return respond(400, { error: "Check the college ID and branch lengths." });
         if (requestedRole === "employee" && (phone.length < 7 || phone.length > 25 || workCategory.length < 2 || workCategory.length > 80)) {
@@ -75,6 +93,7 @@ Deno.serve(async (request) => {
             data: {
                 full_name: fullName,
                 requested_role: requestedRole,
+                department,
                 college_id: requestedRole === "student" ? collegeId : "",
                 branch: requestedRole === "student" ? branch : "",
                 phone: requestedRole === "employee" ? phone : "",
@@ -84,15 +103,42 @@ Deno.serve(async (request) => {
         });
         if (error) return respond(400, { error: error.message });
 
+        const invitedUserId = data.user?.id;
+        if (!invitedUserId) return respond(500, { error: "Invitation was created, but its account could not be identified." });
+
+        const mimeType = idCardFile.type.toLowerCase();
+        const idCardPath = `id-cards/${invitedUserId}/${crypto.randomUUID()}.${idCardTypes[mimeType]}`;
+        const { error: uploadError } = await adminClient.storage
+            .from("campuscare-private")
+            .upload(idCardPath, new Uint8Array(await idCardFile.arrayBuffer()), {
+                cacheControl: "3600",
+                contentType: mimeType,
+                upsert: false,
+            });
+        if (uploadError) {
+            await adminClient.auth.admin.deleteUser(invitedUserId);
+            return respond(500, { error: "The ID card could not be saved. Please try again." });
+        }
+
+        const { error: profileError } = await adminClient
+            .from("profiles")
+            .update({ department, id_card_path: idCardPath, id_card_mime_type: mimeType })
+            .eq("id", invitedUserId);
+        if (profileError) {
+            await adminClient.storage.from("campuscare-private").remove([idCardPath]);
+            await adminClient.auth.admin.deleteUser(invitedUserId);
+            return respond(500, { error: "The account details could not be saved. Please try again." });
+        }
+
         return respond(200, {
             invited: true,
-            user_id: data.user?.id,
+            user_id: invitedUserId,
             email,
             requested_role: requestedRole,
+            department,
             message: "Invitation sent. This account remains pending until management approves it.",
         });
     } catch (error) {
         return respond(500, { error: error instanceof Error ? error.message : "Could not send the invitation." });
     }
 });
-

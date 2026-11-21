@@ -20,12 +20,13 @@ Apply the existing migrations in order, then apply `supabase/migrations/20261029
 6. `20261029000000_employee_workflow.sql`
 7. `20261103000000_owner_deletion_and_portal_guard.sql`
 8. `20261120000000_management_invites.sql`
+9. `20261121070000_management_account_department.sql`
 
 The complaint-proof migration expects a private `complaint-proofs` bucket (25 MB; images and videos). The new workflow migration creates a second private bucket for college ID cards and employee work evidence.
 
 Students request an account with college ID/roll number, branch, and a college ID image/PDF. Employees request an account with name, email, mobile number, and work category. New requests stay pending until management approves them. Admins can approve and manage student/employee accounts, but only the owner can create or change Admin accounts.
 
-Management assigns an approved employee to a complaint. The employee sees only assigned complaints, uploads a work photo/video, and submits it for management review. Management resolves or returns the work; the student can see the updated status and management note.
+Management can invite accounts from the management portal with the person's name, email, role, department, and private ID card image/PDF. Student and employee details are collected for the selected role. Every invitation stays pending until an authorized manager approves it; only the owner can invite an admin. Management assigns an approved employee to a complaint. The employee sees only assigned complaints, uploads a work photo/video, and submits it for management review. Management resolves or returns the work; the student can see the updated status and management note.
 
 ## Assignment email setup
 
@@ -69,4 +70,3 @@ Deploy this folder as the static site root, including `index.html`, `style.css`,
 - Complaint history cannot be deleted from the browser.
 
 The earlier demo verified student sign-in, complaint submission/tracking, and management access. The new workflow requires the migration and Edge Function setup above before the live site supports it.
-
