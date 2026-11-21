@@ -38,6 +38,7 @@ let pendingIdCardFile = null;
 let pendingVerification = null;
 let invitePasswordPortal = null;
 let inviteVerificationInProgress = false;
+let passwordRecoveryInProgress = false;
 let sessionApplyVersion = 0;
 let lastRenderedSessionKey = "";
 const complaintRenderVersions = new Map();
@@ -319,6 +320,7 @@ function renderSession() {
 }
 
 async function applySession(session) {
+    if (passwordRecoveryInProgress) return;
     const version = ++sessionApplyVersion;
     const nextUser = session?.user ?? null;
     if (!nextUser) {
@@ -1057,6 +1059,7 @@ byId("show-signup").addEventListener("click", () => {
 });
 byId("show-signin").addEventListener("click", () => {
     setMessage("");
+    passwordRecoveryInProgress = false;
     setAuthView("signin");
 });
 byId("forgot-password").addEventListener("click", () => {
@@ -1282,6 +1285,7 @@ byId("update-password-form").addEventListener("submit", (event) => {
     handleAuthSubmit(form, async () => {
         const { error } = await updatePassword(password);
         if (error) throw error;
+        passwordRecoveryInProgress = false;
         const { error: signOutError } = await supabase.auth.signOut();
         if (signOutError) throw signOutError;
         state.user = null;
@@ -1617,15 +1621,31 @@ if (invitationParams.get("verify") === "invite") {
     window.history.replaceState(null, "", window.location.pathname);
 }
 
+const recoveryQueryParams = new URLSearchParams(window.location.search);
+const recoveryHashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+const recoveryErrorCode = recoveryQueryParams.get("error_code") || recoveryHashParams.get("error_code") || "";
+const recoveryErrorDescription = recoveryQueryParams.get("error_description") || recoveryHashParams.get("error_description") || "";
+if (recoveryErrorCode === "otp_expired" || /email link is invalid or has expired/i.test(recoveryErrorDescription)) {
+    showPortal(state.selectedPortal || "student");
+    setAuthView("reset");
+    setMessage("That reset link is invalid or expired. Request a new reset link.", "error");
+    window.history.replaceState(null, "", window.location.pathname + "#portal");
+}
+
 if (supabase) {
     supabase.auth.onAuthStateChange((event, session) => {
         if (event === "PASSWORD_RECOVERY") {
+            passwordRecoveryInProgress = true;
+            sessionApplyVersion += 1;
             if (!state.selectedPortal) showPortal("student");
+            else portalPanel.hidden = false;
+            dashboard.hidden = true;
             setAuthView("update");
             showAuth();
             setMessage("Choose a new password to finish resetting your account.");
             return;
         }
+        if (passwordRecoveryInProgress) return;
         if (inviteVerificationInProgress) return;
         window.setTimeout(() => applySession(session), 0);
     });
@@ -1635,7 +1655,7 @@ if (supabase) {
             setPortalMessage("Could not restore your session. " + formatError(error));
             return;
         }
-        if (data.session) applySession(data.session);
+        if (data.session && !passwordRecoveryInProgress) applySession(data.session);
     });
 }
 
