@@ -25,7 +25,7 @@ function requireClient() {
 export async function getProfile(userId) {
     const { data, error } = await requireClient()
         .from("profiles")
-        .select("id, full_name, role, requested_role, college_id, branch, phone, work_category, id_card_path, id_card_mime_type")
+        .select("id, full_name, role, requested_role, college_id, branch, department, phone, work_category, id_card_path, id_card_mime_type")
         .eq("id", userId)
         .single();
     if (error) throw error;
@@ -56,9 +56,30 @@ export async function resendSignupOtp(email) {
 }
 
 export async function createManagementAccount(details) {
-    const { data, error } = await requireClient().functions.invoke("create-account", { body: details });
-    if (error) throw error;
-    return data;
+    validateIdCard(details.id_card);
+    const client = requireClient();
+    const { data: sessionData, error: sessionError } = await client.auth.getSession();
+    if (sessionError) throw sessionError;
+    if (!sessionData.session?.access_token) throw new Error("Sign in with a management account first.");
+
+    const body = new FormData();
+    for (const [key, value] of Object.entries(details)) {
+        if (key === "id_card") continue;
+        body.append(key, String(value ?? ""));
+    }
+    body.append("id_card", details.id_card, details.id_card.name);
+
+    const response = await fetch(supabaseUrl + "/functions/v1/create-account", {
+        method: "POST",
+        headers: {
+            apikey: publishableKey,
+            Authorization: "Bearer " + sessionData.session.access_token
+        },
+        body
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || "Could not send the account invitation.");
+    return result;
 }
 
 export async function registerEmployee(email, password, fullName, phone, workCategory) {
@@ -223,7 +244,7 @@ const WORK_PROOF_TYPES = new Set([
 ]);
 const ID_CARD_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif", "application/pdf"]);
 export const WORK_PROOF_MAX_BYTES = 25 * 1024 * 1024;
-export const ID_CARD_MAX_BYTES = 10 * 1024 * 1024;
+export const ID_CARD_MAX_BYTES = 5 * 1024 * 1024;
 
 function validateEvidence(file, types, maxBytes, label) {
     if (!file) throw new Error("Choose " + label + " first.");
@@ -295,7 +316,7 @@ export async function createPrivateEvidenceUrl(path) {
 export async function listProfilesForManagement() {
     const { data, error } = await requireClient()
         .from("profiles")
-        .select("id, full_name, email, college_id, branch, role, requested_role, phone, work_category, id_card_path, id_card_mime_type, created_at")
+        .select("id, full_name, email, college_id, branch, department, role, requested_role, phone, work_category, id_card_path, id_card_mime_type, created_at")
         .order("created_at", { ascending: true });
     if (error) throw error;
     return data ?? [];
@@ -322,4 +343,3 @@ export async function assignComplaint(complaintId, employeeId) {
     });
     return { assignment: assigned, notificationError };
 }
-

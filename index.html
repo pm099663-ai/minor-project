@@ -358,12 +358,16 @@
                                             <option value="employee">Employee</option>
                                             <option value="admin" data-owner-only hidden>Admin (owner only)</option>
                                         </select>
+                                        <label for="management-create-department">Department</label>
+                                        <input id="management-create-department" name="department" type="text" maxlength="100" required>
+                                        <label for="management-create-id-card">ID card image or PDF</label>
+                                        <input id="management-create-id-card" name="id_card" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf" required>
+                                        <p class="field-hint">Management can review this ID card privately before approving the account.</p>
                                         <div id="management-create-student-fields" class="form-grid">
                                             <label for="management-create-college-id">College ID / roll number</label>
                                             <input id="management-create-college-id" name="college_id" type="text" maxlength="50">
                                             <label for="management-create-branch">Branch</label>
                                             <input id="management-create-branch" name="branch" type="text" maxlength="80">
-                                            <p class="field-hint">The student can upload their college ID after verifying the email.</p>
                                         </div>
                                         <div id="management-create-employee-fields" class="form-grid" hidden>
                                             <label for="management-create-phone">Mobile number</label>
@@ -402,4 +406,3 @@
     <script type="module" src="main.js"></script>
 </body>
 </html>
-
