@@ -18,6 +18,8 @@ Apply the existing migrations in order, then apply `supabase/migrations/20261029
 4. `20261027000000_complaint_proof_storage.sql`
 5. `20261028000000_student_branch_and_owner_name.sql`
 6. `20261029000000_employee_workflow.sql`
+7. `20261103000000_owner_deletion_and_portal_guard.sql`
+8. `20261120000000_management_invites.sql`
 
 The complaint-proof migration expects a private `complaint-proofs` bucket (25 MB; images and videos). The new workflow migration creates a second private bucket for college ID cards and employee work evidence.
 
@@ -34,6 +36,14 @@ Deploy `supabase/functions/notify-assignment` as a Supabase Edge Function. Confi
 - `APP_URL` (optional): website URL; defaults to `https://campuscare-complaints.vercel.app`.
 
 Supabase provides its project URL and service-role key to deployed Edge Functions. Never put the service-role key or Resend key in browser code. Assignment works in the app without the email function, but the employee notification email needs the function and a verified sender configured.
+
+## Management invitations and email OTP
+
+Deploy `supabase/functions/create-account` as a Supabase Edge Function. Management can invite students and employees; only the owner can invite an admin. Every invited account remains pending until management approves it.
+
+In Supabase Dashboard, enable email confirmation under **Authentication → Sign In / Providers → Email**. Under **Authentication → Email Templates**, replace the **Confirm signup** and **Invite user** templates with `supabase/email-templates/confirm-signup.html` and `supabase/email-templates/invite-user.html`. These templates send a 6-digit OTP. Keep the **Reset password** template's confirmation link so users can open the secure password-reset page.
+
+The live website is already in the Auth redirect allowlist. For a local site, add its URL to **Authentication → URL Configuration → Redirect URLs**.
 
 ## Run locally
 
@@ -59,3 +69,4 @@ Deploy this folder as the static site root, including `index.html`, `style.css`,
 - Complaint history cannot be deleted from the browser.
 
 The earlier demo verified student sign-in, complaint submission/tracking, and management access. The new workflow requires the migration and Edge Function setup above before the live site supports it.
+

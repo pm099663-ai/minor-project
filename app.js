@@ -47,6 +47,20 @@ export async function registerStudent(email, password, fullName, collegeId, bran
     });
 }
 
+export async function verifyEmailOtp(email, token, type = "email") {
+    return requireClient().auth.verifyOtp({ email, token, type });
+}
+
+export async function resendSignupOtp(email) {
+    return requireClient().auth.resend({ type: "signup", email });
+}
+
+export async function createManagementAccount(details) {
+    const { data, error } = await requireClient().functions.invoke("create-account", { body: details });
+    if (error) throw error;
+    return data;
+}
+
 export async function registerEmployee(email, password, fullName, phone, workCategory) {
     return requireClient().auth.signUp({
         email,
@@ -308,3 +322,4 @@ export async function assignComplaint(complaintId, employeeId) {
     });
     return { assignment: assigned, notificationError };
 }
+
