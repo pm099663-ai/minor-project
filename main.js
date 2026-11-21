@@ -119,7 +119,7 @@ function setBusy(form, busy, busyLabel = "Working…") {
 function formatError(error) {
     const message = String(error?.message || "Something went wrong.");
     if (/invalid login credentials/i.test(message)) return "Email or password is incorrect.";
-    if (/email not confirmed/i.test(message)) return "Enter the 6-digit email code first, then sign in.";
+    if (/email not confirmed/i.test(message)) return "Enter the email verification code first, then sign in.";
     if (/user already registered/i.test(message)) return "An account already exists for this email. Sign in instead.";
     if (/password.*(weak|short|characters)/i.test(message)) return "Choose a stronger password with at least 10 characters.";
     if (/failed to fetch|network/i.test(message)) return "Could not reach Supabase. Check the project URL, key, and internet connection.";
@@ -211,8 +211,8 @@ function setAuthView(view) {
     } else if (view === "verify") {
         byId("auth-intro").textContent = "Verify your email to finish creating your account.";
         byId("verify-email-description").textContent = pendingVerification?.type === "invite"
-            ? "Enter the 6-digit invitation code sent to " + (pendingVerification.email || "your email") + "."
-            : "Enter the 6-digit code sent to " + (pendingVerification?.email || "your email") + ".";
+            ? "Enter the invitation code sent to " + (pendingVerification.email || "your email") + "."
+            : "Enter the verification code sent to " + (pendingVerification?.email || "your email") + ".";
     } else {
         byId("auth-intro").textContent = "Set a new password for your account.";
     }
@@ -1123,7 +1123,7 @@ byId("signup-form").addEventListener("submit", (event) => {
             byId("email-otp").value = "";
             showAuth();
             setAuthView("verify");
-            setMessage("Enter the 6-digit code sent to " + email + ".", "success");
+            setMessage("Enter the verification code sent to " + email + ".", "success");
         }
     }, "Creating account…");
 });
@@ -1148,7 +1148,7 @@ byId("employee-signup-form").addEventListener("submit", (event) => {
             byId("email-otp").value = "";
             showAuth();
             setAuthView("verify");
-            setMessage("Enter the 6-digit code sent to " + email + ".", "success");
+            setMessage("Enter the verification code sent to " + email + ".", "success");
         }
     }, "Requesting account…");
 });
@@ -1176,7 +1176,7 @@ byId("admin-signup-form").addEventListener("submit", (event) => {
             byId("email-otp").value = "";
             showAuth();
             setAuthView("verify");
-            setMessage("Enter the 6-digit code sent to " + email + ".", "success");
+            setMessage("Enter the verification code sent to " + email + ".", "success");
         }
     }, "Requesting management account…");
 });
@@ -1229,7 +1229,7 @@ byId("resend-email-otp").addEventListener("click", () => {
     if (!pendingVerification?.email || pendingVerification.type !== "signup") return;
     resendSignupOtp(pendingVerification.email).then(({ error }) => {
         if (error) throw error;
-        setMessage("A new 6-digit code was sent to " + pendingVerification.email + ".", "success");
+        setMessage("A new verification code was sent to " + pendingVerification.email + ".", "success");
     }).catch((error) => setMessage(formatError(error), "error"));
 });
 
@@ -1613,7 +1613,7 @@ if (invitationParams.get("verify") === "invite") {
     byId("email-otp").value = "";
     showPortal("student");
     setAuthView("verify");
-    if (invitedEmail) byId("verify-email-description").textContent = "Enter the 6-digit invitation code sent to " + invitedEmail + ".";
+    if (invitedEmail) byId("verify-email-description").textContent = "Enter the invitation code sent to " + invitedEmail + ".";
     window.history.replaceState(null, "", window.location.pathname);
 }
 
