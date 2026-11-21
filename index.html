@@ -358,49 +358,6 @@
                                         <p id="owner-pending-count" class="muted"></p>
                                     </div>
                                 </div>
-                                <details class="management-create-account">
-                                    <summary>Create account</summary>
-                                    <p class="muted">Send an email invitation. The new account stays pending until management approves the requested access.</p>
-                                    <form id="management-create-account-form" class="form-grid">
-                                        <label for="management-create-name">Full name</label>
-                                        <input id="management-create-name" name="full_name" type="text" maxlength="100" required>
-                                        <label for="management-create-email">Email address</label>
-                                        <input id="management-create-email" name="email" type="email" maxlength="254" required>
-                                        <label for="management-create-role">Requested access</label>
-                                        <select id="management-create-role" name="requested_role" required>
-                                            <option value="student">Student</option>
-                                            <option value="employee">Employee</option>
-                                            <option value="admin" data-owner-only hidden>Admin (owner only)</option>
-                                        </select>
-                                        <label for="management-create-department">Department</label>
-                                        <input id="management-create-department" name="department" type="text" maxlength="100" required>
-                                        <label for="management-create-id-card">ID card image or PDF</label>
-                                        <input id="management-create-id-card" name="id_card" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf" required>
-                                        <p class="field-hint">Management can review this ID card privately before approving the account.</p>
-                                        <div id="management-create-student-fields" class="form-grid">
-                                            <label for="management-create-college-id">College ID / roll number</label>
-                                            <input id="management-create-college-id" name="college_id" type="text" maxlength="50">
-                                            <label for="management-create-branch">Branch</label>
-                                            <input id="management-create-branch" name="branch" type="text" maxlength="80">
-                                        </div>
-                                        <div id="management-create-employee-fields" class="form-grid" hidden>
-                                            <label for="management-create-phone">Mobile number</label>
-                                            <input id="management-create-phone" name="phone" type="tel" minlength="7" maxlength="25">
-                                            <label for="management-create-work-category">Work category</label>
-                                            <select id="management-create-work-category" name="work_category">
-                                                <option value="">Choose a work category</option>
-                                                <option>Electrician</option>
-                                                <option>Plumber</option>
-                                                <option>Construction work</option>
-                                                <option>Technical support</option>
-                                                <option>Cleaning</option>
-                                                <option>Carpentry</option>
-                                                <option>Other maintenance</option>
-                                            </select>
-                                        </div>
-                                        <button type="submit" class="form-submit">Send invitation</button>
-                                    </form>
-                                </details>
                                 <div id="owner-account-list" class="owner-account-list" aria-live="polite"></div>
                             </section>
                         </div>
@@ -420,3 +377,4 @@
     <script type="module" src="main.js"></script>
 </body>
 </html>
+
